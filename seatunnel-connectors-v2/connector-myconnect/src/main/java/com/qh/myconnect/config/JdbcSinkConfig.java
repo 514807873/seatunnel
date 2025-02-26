@@ -49,6 +49,7 @@ public class JdbcSinkConfig implements Serializable {
     private String dbSchema;
     private String dbDatasourceId;
     private boolean openQuality;
+    private int batchSize;
 
     public static JdbcSinkConfig of(ReadonlyConfig config) {
         JdbcSinkConfig.Builder builder = JdbcSinkConfig.builder();
@@ -63,6 +64,7 @@ public class JdbcSinkConfig implements Serializable {
         config.getOptional(JdbcOptions.TABLE).ifPresent(builder::table);
         config.getOptional(JdbcOptions.SUPPORT_UPSERT_BY_QUERY_PRIMARY_KEY_EXIST)
                 .ifPresent(builder::supportUpsertByQueryPrimaryKeyExist);
+        config.getOptional(JdbcOptions.BATCH_SIZE).ifPresentOrElse(builder::batchSize, () -> builder.batchSize(1000));
         config.getOptional(JdbcOptions.QUERY).ifPresent(builder::simpleSql);
         config.getOptional(JdbcOptions.PRE_CONFIG).ifPresent(builder::preConfig);
         config.getOptional(JdbcOptions.DB_TYPE).ifPresent(builder::dbType);

@@ -124,6 +124,24 @@ public class ClickHouseDialect implements JdbcDialect {
                 sourceTable);
     }
 
+    public String updateTableSql(JdbcSinkConfig jdbcSinkConfig, String columnName, List<String> ucColumns) {
+        if (jdbcSinkConfig.getDbSchema() != null && !jdbcSinkConfig.getDbSchema().isEmpty()) {
+            return "alter table " +
+                   jdbcSinkConfig.getDbSchema() + "." +
+                   quoteIdentifier(jdbcSinkConfig.getTable()) +
+                   " update " +
+                   quoteIdentifier(columnName) +
+                   " = ? where " +
+                   StringUtils.join(ucColumns.stream().map(x -> quoteIdentifier(x) + " =? ").collect(Collectors.toList()), " and ");
+        }
+        return "alter table " +
+               quoteIdentifier(jdbcSinkConfig.getTable()) +
+               " update " +
+               quoteIdentifier(columnName) +
+               " = ? where " +
+               StringUtils.join(ucColumns.stream().map(x -> quoteIdentifier(x) + " =? ").collect(Collectors.toList()), " and ");
+    }
+
     public int deleteData(
             Connection connection, String table, String ucTable, List<ColumnMapper> ucColumns) {
 
@@ -203,15 +221,16 @@ public class ClickHouseDialect implements JdbcDialect {
         return del;
     }
 
-    public int deleteDataZipperCluster(
+    public int deleteDataZipper(
             JdbcSinkConfig jdbcSinkConfig,
             Connection connection,
-            String table,
-            String ucTable,
-            List<ColumnMapper> ucColumns,
-            String clusterName) {
-        String OPERATEFLAG = "OPERATEFLAG";
-        String OPERATETIME_END = "OPERATETIME_END";
+            String zipperTable,
+            String originTable,
+            List<ColumnMapper> columnMappers,
+            List<ColumnMapper> ucColumns) {
+        String OPERATEFLAG = jdbcSinkConfig.getPreConfig().getZipperColumns().get(0);
+        String OPERATETIME = jdbcSinkConfig.getPreConfig().getZipperColumns().get(1);
+        String OPERATETIME_END = jdbcSinkConfig.getPreConfig().getZipperColumns().get(2);
         LocalDateTime now = LocalDateTime.now();
         DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
         String currentTimeString = now.format(formatter);
@@ -225,32 +244,160 @@ public class ClickHouseDialect implements JdbcDialect {
             default:
                 break;
         }
-
-
+        List<String> columns = columnMappers.stream().map(ColumnMapper::getSinkColumnName).collect(Collectors.toList());
+        List<String> newColumns = columns.stream().map(this::quoteIdentifier).collect(Collectors.toList());
+        List<String> allColumns = columns.stream().map(this::quoteIdentifier).collect(Collectors.toList());
+        allColumns.add(quoteIdentifier(OPERATEFLAG));
+        allColumns.add(quoteIdentifier(OPERATETIME));
+        allColumns.add(quoteIdentifier(OPERATETIME_END));
         String querySql =
                 "select count(1) sl from  `<table>`   "
                 + "WHERE (<pks:{pk | `<pk.sinkColumnName>`}; separator=\", \">) "
                 + "NOT IN   (SELECT  <pks:{pk | `<pk.sinkColumnName>`}; separator=\", \"> FROM `<ucTable>`  ) "
-                + " and " + OPERATETIME_END + " is null";
+                + " and " + OPERATETIME_END + " is null and " + OPERATEFLAG + " in ('I','U') ";
         ST st = new ST(querySql);
-        st.add("table", table);
-        st.add("ucTable", ucTable);
+        st.add("table", zipperTable);
+        st.add("ucTable", originTable);
         st.add("pks", ucColumns);
         PreparedStatement query = null;
         int del = 0;
 
+
+        String insertDelSql =
+                "insert into  `<table>` (<allColumns>) "
+                + "select <columns>,"
+                + " 'D' " + OPERATEFLAG + ","
+                + "'" + currentTimeString + "' " + OPERATETIME + ", "
+                + "'" + currentTimeString + "' " + OPERATETIME_END + " "
+                + " from (select * from  <table> where "+ OPERATETIME_END + " IS NULL and " + OPERATEFLAG + " in ('I','U') " +" ) a "
+                + "   WHERE (<pks:{pk | `<pk.sinkColumnName>`}; "
+                + "separator=\", "
+                + "\">) NOT IN   (SELECT  <pks:{pk | `<pk.sinkColumnName>`}; separator=\", \"> FROM "
+                + "`<ucTable>`  ) ";
+        ST template1 = new ST(insertDelSql);
+        template1.add("table", zipperTable);
+        template1.add("ucTable", originTable);
+        template1.add("columns", StringUtils.join(newColumns, ","));
+        template1.add("allColumns", StringUtils.join(allColumns, ","));
+        template1.add("pks", ucColumns);
+        String render = template1.render();
+        try {
+            connection.createStatement().execute(render);
+        } catch (SQLException e) {
+            throw new RuntimeException(e);
+        }
+
+
         String delSql =
-                "ALTER  TABLE `<table>` on CLUSTER  <clusterName> UPDATE "
-                + OPERATEFLAG + "='D'," + OPERATETIME_END + "='" + currentTimeString + "'"
+                "ALTER  TABLE `<table>`  UPDATE "
+                + OPERATETIME_END + "='" + currentTimeString + "'"
                 + "   WHERE (<pks:{pk | `<pk.sinkColumnName>`}; "
                 + "separator=\", "
                 + "\">) NOT IN   (SELECT  <pks:{pk | `<pk.sinkColumnName>`}; separator=\", \"> FROM "
                 + "`<ucTable>`  ) "
-                + " and " + OPERATETIME_END + " IS NULL"
+                + " and " + OPERATETIME_END + " IS NULL and " + OPERATEFLAG + " in ('I','U') "
                 + " SETTINGS allow_nondeterministic_mutations = 1 ";
         ST template = new ST(delSql);
-        template.add("table", table);
-        template.add("ucTable", ucTable);
+        template.add("table", zipperTable);
+        template.add("ucTable", originTable);
+        template.add("pks", ucColumns);
+        PreparedStatement preparedStatement = null;
+        try {
+            query = connection.prepareStatement(st.render());
+            ResultSet resultSet = query.executeQuery();
+            if (resultSet.next()) {
+                del = resultSet.getInt("sl");
+            }
+            query.close();
+
+            preparedStatement = connection.prepareStatement(template.render());
+            preparedStatement.executeUpdate();
+            preparedStatement.close();
+        } catch (SQLException e) {
+            throw new RuntimeException(e);
+        }
+        return del;
+    }
+    public int deleteDataZipperCluster(
+            JdbcSinkConfig jdbcSinkConfig,
+            Connection connection,
+            String zipperTable,
+            String originTable,
+            List<ColumnMapper> columnMappers,
+            List<ColumnMapper> ucColumns,
+            String clusterName) {
+        String OPERATEFLAG = jdbcSinkConfig.getPreConfig().getZipperColumns().get(0);
+        String OPERATETIME = jdbcSinkConfig.getPreConfig().getZipperColumns().get(1);
+        String OPERATETIME_END = jdbcSinkConfig.getPreConfig().getZipperColumns().get(2);
+        LocalDateTime now = LocalDateTime.now();
+        DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
+        String currentTimeString = now.format(formatter);
+        switch (jdbcSinkConfig.getDbType()) {
+            case "PGSQL":
+            case "MYSQL":
+            case "SQLSERVER":
+                OPERATEFLAG = OPERATEFLAG.toLowerCase();
+                OPERATETIME_END = OPERATETIME_END.toLowerCase();
+                break;
+            default:
+                break;
+        }
+        List<String> columns = columnMappers.stream().map(ColumnMapper::getSinkColumnName).collect(Collectors.toList());
+        List<String> newColumns = columns.stream().map(this::quoteIdentifier).collect(Collectors.toList());
+        List<String> allColumns = columns.stream().map(this::quoteIdentifier).collect(Collectors.toList());
+        allColumns.add(quoteIdentifier(OPERATEFLAG));
+        allColumns.add(quoteIdentifier(OPERATETIME));
+        allColumns.add(quoteIdentifier(OPERATETIME_END));
+        String querySql =
+                "select count(1) sl from  `<table>`   "
+                + "WHERE (<pks:{pk | `<pk.sinkColumnName>`}; separator=\", \">) "
+                + "NOT IN   (SELECT  <pks:{pk | `<pk.sinkColumnName>`}; separator=\", \"> FROM `<ucTable>`  ) "
+                + " and " + OPERATETIME_END + " is null and " + OPERATEFLAG + " in ('I','U') ";
+        ST st = new ST(querySql);
+        st.add("table", zipperTable);
+        st.add("ucTable", originTable);
+        st.add("pks", ucColumns);
+        PreparedStatement query = null;
+        int del = 0;
+
+
+        String insertDelSql =
+                "insert into  `<table>` (<allColumns>) "
+                + "select <columns>,"
+                + " 'D' " + OPERATEFLAG + ","
+                + "'" + currentTimeString + "' " + OPERATETIME + ", "
+                + "'" + currentTimeString + "' " + OPERATETIME_END + " "
+                + " from (select * from  <table> where "+ OPERATETIME_END + " IS NULL and " + OPERATEFLAG + " in ('I','U') " +" ) a "
+                + "   WHERE (<pks:{pk | `<pk.sinkColumnName>`}; "
+                + "separator=\", "
+                + "\">) NOT IN   (SELECT  <pks:{pk | `<pk.sinkColumnName>`}; separator=\", \"> FROM "
+                + "`<ucTable>`  ) ";
+        ST template1 = new ST(insertDelSql);
+        template1.add("table", zipperTable);
+        template1.add("ucTable", originTable);
+        template1.add("columns", StringUtils.join(newColumns, ","));
+        template1.add("allColumns", StringUtils.join(allColumns, ","));
+        template1.add("pks", ucColumns);
+        String render = template1.render();
+        try {
+            connection.createStatement().execute(render);
+        } catch (SQLException e) {
+            throw new RuntimeException(e);
+        }
+
+
+        String delSql =
+                "ALTER  TABLE `<table>` on CLUSTER  <clusterName> UPDATE "
+                + OPERATETIME_END + "='" + currentTimeString + "'"
+                + "   WHERE (<pks:{pk | `<pk.sinkColumnName>`}; "
+                + "separator=\", "
+                + "\">) NOT IN   (SELECT  <pks:{pk | `<pk.sinkColumnName>`}; separator=\", \"> FROM "
+                + "`<ucTable>`  ) "
+                + " and " + OPERATETIME_END + " IS NULL and " + OPERATEFLAG + " in ('I','U') "
+                + " SETTINGS allow_nondeterministic_mutations = 1 ";
+        ST template = new ST(delSql);
+        template.add("table", zipperTable);
+        template.add("ucTable", originTable);
         template.add("pks", ucColumns);
         template.add("clusterName", clusterName);
         PreparedStatement preparedStatement = null;
@@ -285,6 +432,21 @@ public class ClickHouseDialect implements JdbcDialect {
         } catch (SQLException e) {
             throw new RuntimeException(e);
         }
+    }
+
+    public String updateTableSqlZipper(JdbcSinkConfig jdbcSinkConfig, List<String> ucColumns) {
+        String columnName = jdbcSinkConfig.getPreConfig().getZipperColumns().get(2);
+        String OPERATEFLAG = jdbcSinkConfig.getPreConfig().getZipperColumns().get(0);
+        LocalDateTime now = LocalDateTime.now();
+        DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
+        String currentTimeString = now.format(formatter);
+        return "alter  table " +
+               quoteIdentifier(jdbcSinkConfig.getPreConfig().getZipperTableName()) +
+               " update "
+//               + quoteIdentifier(OPERATEFLAG) + "='U',"
+               + quoteIdentifier(columnName) + " = " + "'" + currentTimeString + "'" +
+               " where " + quoteIdentifier(columnName) + " is null and " +
+               StringUtils.join(ucColumns.stream().map(x -> quoteIdentifier(x) + " =? ").collect(Collectors.toList()), " and ");
     }
 
     public String getSinkQueryUpdate(

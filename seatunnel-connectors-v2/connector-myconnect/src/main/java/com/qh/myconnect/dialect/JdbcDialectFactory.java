@@ -5,6 +5,7 @@ import com.qh.myconnect.dialect.mysql.MysqlDialect;
 import com.qh.myconnect.dialect.oracle.OracleDialect;
 import com.qh.myconnect.dialect.pgsql.PostgresDialect;
 import com.qh.myconnect.dialect.sqlserver.SqlServerDialect;
+import com.qh.myconnect.dialect.trino.TrinoDialect;
 
 import java.util.HashMap;
 
@@ -18,6 +19,7 @@ public class JdbcDialectFactory {
                     put("clickhouse", new ClickHouseDialect());
                     put("pgsql", new PostgresDialect());
                     put("sqlserver", new SqlServerDialect());
+                    put("trino", new TrinoDialect());
                 }
             };
 

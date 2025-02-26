@@ -2,18 +2,15 @@ package com.qh.myconnect.config;
 
 import org.apache.seatunnel.api.configuration.util.OptionMark;
 
-import com.clickhouse.jdbc.internal.ClickHouseConnectionImpl;
+//import com.clickhouse.jdbc.internal.ClickHouseConnectionImpl;
 import com.qh.myconnect.dialect.JdbcDialectFactory;
 import lombok.Data;
 
 import java.io.Serializable;
 import java.sql.Connection;
-import java.sql.DatabaseMetaData;
 import java.sql.PreparedStatement;
-import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 
@@ -42,6 +39,21 @@ public class PreConfig implements Serializable {
     @OptionMark(description = "ck 集群模式下 集群的名字")
     private String clusterName;
 
+    @OptionMark(description = "增量更新模式下 是否开启数据删除操作")
+    private boolean openDelete = true;
+
+    @OptionMark(description = "增量拉链模式下 拉链表的表名称")
+    private String zipperTableName;
+
+    @OptionMark(description = "增量拉链模式下 拉链表三个字段名")
+    private List<String> zipperColumns;
+
+    @OptionMark(description = "自动时间戳")
+    private boolean autoTimestamp = false;
+
+    @OptionMark(description = "自动时间戳字段名")
+    private String autoTimestampColumnName;
+
     public PreConfig() {
     }
 
@@ -53,29 +65,15 @@ public class PreConfig implements Serializable {
             schemaPattern = null;
         }
 
-        DatabaseMetaData metadata = connection.getMetaData();
-        ResultSet rsColumn = metadata.getColumns(null, schemaPattern, tableName, null);
-        List<String> columns = new ArrayList<>();
-        while (rsColumn.next()) {
-            String name = rsColumn.getString("COLUMN_NAME");
-            columns.add(name);
-        }
-
-        if (columns.isEmpty()) {
-            throw new RuntimeException("目标表不存在");
-        }
-
         if (this.insertMode.equalsIgnoreCase("complete")
             && this.cleanTableWhenComplete
             && this.cleanTableWhenCompleteNoDataIn) {
-            Statement st = connection.createStatement();
-            st.execute(
-                    JdbcDialectFactory.getJdbcDialect(jdbcSinkConfig.getDbType())
-                            .truncateTable(jdbcSinkConfig));
-            st.close();
+            try (Statement st = connection.createStatement()) {
+                st.execute(JdbcDialectFactory.getJdbcDialect(jdbcSinkConfig.getDbType()).truncateTable(jdbcSinkConfig));
+            }
         }
 
-        if (this.insertMode.equalsIgnoreCase("increment")) {
+        if (this.insertMode.equalsIgnoreCase("increment") && null != this.incrementMode && this.incrementMode.equalsIgnoreCase("update")) {
             if (null == jdbcSinkConfig.getPrimaryKeys()
                 || jdbcSinkConfig.getPrimaryKeys().isEmpty()) {
                 throw new RuntimeException(String.format("增量更新模式下,未标示逻辑主键", tableName));
@@ -89,8 +87,7 @@ public class PreConfig implements Serializable {
                         JdbcDialectFactory.getJdbcDialect(jdbcSinkConfig.getDbType())
                                 .dropTableOnCluster(
                                         jdbcSinkConfig,
-                                        ((ClickHouseConnectionImpl) connection)
-                                                .getCurrentDatabase(),
+                                        jdbcSinkConfig.getDatabase(),
                                         tmpTableName,
                                         clusterName);
                 copyTableOnlyColumnSql =
@@ -100,8 +97,8 @@ public class PreConfig implements Serializable {
                                         tmpTableName,
                                         jdbcSinkConfig,
                                         clusterName,
-                                        ((ClickHouseConnectionImpl) connection)
-                                                .getCurrentDatabase());
+                                        jdbcSinkConfig.getDatabase()
+                                );
                 try {
                     PreparedStatement drop = connection.prepareStatement(dropSqlCluster);
                     drop.execute();
@@ -142,9 +139,15 @@ public class PreConfig implements Serializable {
                 preparedStatement.close();
             }
         }
+
+        if (this.insertMode.equalsIgnoreCase("increment") && null != this.incrementMode && this.incrementMode.equalsIgnoreCase("zipper")) {
+            try (Statement st = connection.createStatement()) {
+                st.execute(JdbcDialectFactory.getJdbcDialect(jdbcSinkConfig.getDbType()).truncateTable(jdbcSinkConfig));
+            }
+        }
     }
 
-    public void dropUcTable(Connection connection, JdbcSinkConfig jdbcSinkConfig) throws SQLException{
+    public void dropUcTable(Connection connection, JdbcSinkConfig jdbcSinkConfig) throws SQLException {
         String tableName = jdbcSinkConfig.getTable();
         if (this.insertMode.equalsIgnoreCase("increment")) {
             String tmpTableName = "XJ$_" + tableName;
@@ -156,8 +159,7 @@ public class PreConfig implements Serializable {
                         JdbcDialectFactory.getJdbcDialect(jdbcSinkConfig.getDbType())
                                 .dropTableOnCluster(
                                         jdbcSinkConfig,
-                                        ((ClickHouseConnectionImpl) connection)
-                                                .getCurrentDatabase(),
+                                        jdbcSinkConfig.getDatabase(),
                                         tmpTableName,
                                         clusterName);
                 try {

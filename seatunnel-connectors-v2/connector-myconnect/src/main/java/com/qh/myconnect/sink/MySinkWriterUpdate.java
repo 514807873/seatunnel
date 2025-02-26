@@ -1,6 +1,7 @@
 package com.qh.myconnect.sink;
 
 import com.alibaba.fastjson2.JSONWriter;
+import com.qh.myconnect.config.MidCount;
 import com.qh.myconnect.config.SubTaskStatus;
 import com.qh.myconnect.converter.CodeConverter;
 import org.apache.commons.lang3.StringUtils;
@@ -46,41 +47,30 @@ import java.util.stream.Collectors;
 public class MySinkWriterUpdate extends AbstractSinkWriter<SeaTunnelRow, Void> {
     private final SeaTunnelRowType sourceRowType;
     private final Context context;
-    private List<SeaTunnelRow> cld = new ArrayList<>();
-    private Long writeCount = 0L;
-
-    private Long insertCount = 0L;
-    private Long keepCount = 0L;
-
-    private Long updateCount = 0L;
-    private Long deleteCount = 0L;
-
-    private Long errorCount = 0L;
-
-    private Long qualityCount = 0L;
+    private final List<SeaTunnelRow> cld = new ArrayList<>();
+    private final MidCount midCount = new MidCount();
     private final JdbcSinkConfig jdbcSinkConfig;
-    private JobContext jobContext;
+    private final JobContext jobContext;
 
-    private JdbcDialect jdbcDialect;
+    private final JdbcDialect jdbcDialect;
 
-    private LocalDateTime startTime;
-    private Map<String, String> metaDataHash;
+    private final LocalDateTime startTime;
+    private final Map<String, String> metaDataHash;
 
-    private Connection conn;
+    private final Connection conn;
 
-    private String table;
-    private List<ColumnMapper> columnMappers = new ArrayList<>();
+    private final String table;
+    private final List<ColumnMapper> columnMappers = new ArrayList<>();
 
     private SeaTunnelRowType sinkTableRowType;
 
     private final Util util = new Util();
-    private int batchSize = 1000;
-    private PreConfig preConfig;
+    private final PreConfig preConfig;
 
     private final Integer currentTaskId;
 
-    private Set sqlErrorType = new HashSet();
-    private String tmpTable;
+    private final Set sqlErrorType = new HashSet();
+    private final String tmpTable;
     private CodeConverter converter = new CodeConverter();
     private Set<String> ignoreColumns = new HashSet<>();
 
@@ -91,6 +81,12 @@ public class MySinkWriterUpdate extends AbstractSinkWriter<SeaTunnelRow, Void> {
         this.currentTaskId = context.getIndexOfSubtask();
         log.info("currentTaskId:" + this.currentTaskId);
         this.jdbcSinkConfig = JdbcSinkConfig.of(config);
+        if (jdbcSinkConfig.getDriver().equalsIgnoreCase("com.github.housepower.jdbc.ClickHouseDriver")) {
+            this.jdbcSinkConfig.setBatchSize(50000);
+        }
+        if (jdbcSinkConfig.getBatchSize() == 0) {
+            this.jdbcSinkConfig.setBatchSize(2000);
+        }
         this.tmpTable = "XJ$_" + this.jdbcSinkConfig.getTable();
         this.table = this.jdbcSinkConfig.getTable();
         this.preConfig = jdbcSinkConfig.getPreConfig();
@@ -120,13 +116,13 @@ public class MySinkWriterUpdate extends AbstractSinkWriter<SeaTunnelRow, Void> {
 
     @Override
     public void write(SeaTunnelRow element) throws IOException {
-        this.writeCount++;
+        midCount.setWriteCount(midCount.getWriteCount() + 1);
         if (this.jdbcSinkConfig.isOpenQuality()) {
 //            this.qualityCount++;
 //            return;
         }
         this.cld.add(element);
-        if (this.writeCount.longValue() % batchSize == 0 || this.jobContext.getJobMode().equals(JobMode.STREAMING)) {
+        if (midCount.getWriteCount() % this.jdbcSinkConfig.getBatchSize() == 0 || this.jobContext.getJobMode().equals(JobMode.STREAMING)) {
             this.insertToDb();
             cld.clear();
         }
@@ -206,38 +202,46 @@ public class MySinkWriterUpdate extends AbstractSinkWriter<SeaTunnelRow, Void> {
                                 .filter(ColumnMapper::isUc)
                                 .collect(Collectors.toList());
                 //处理删除数据
+                log.info("开始处理删除数据");
                 {
-                    long del = 0;
-                    if (this.jdbcSinkConfig.getDbSchema() != null
-                        && !this.jdbcSinkConfig.getDbSchema().equals("")) {
-                        del =
-                                this.jdbcDialect.deleteData(
-                                        conn,
-                                        this.jdbcSinkConfig.getDbSchema() + "." + table,
-                                        this.jdbcSinkConfig.getDbSchema() + "." + tmpTable,
-                                        ucColumns);
-                    }
-                    else if (null != this.jdbcSinkConfig.getPreConfig().getClusterName()
-                             && !this.jdbcSinkConfig
-                            .getPreConfig()
-                            .getClusterName()
-                            .equalsIgnoreCase("")) {
-                        del =
-                                this.jdbcDialect.deleteDataOnCluster(
-                                        conn,
-                                        table,
-                                        tmpTable,
-                                        ucColumns,
-                                        this.jdbcSinkConfig.getPreConfig().getClusterName());
-                    }
-                    else {
-                        del = this.jdbcDialect.deleteData(conn, table, tmpTable, ucColumns);
+                    if (preConfig.isOpenDelete()) {
+                        long del = 0;
+                        if (this.jdbcSinkConfig.getDbSchema() != null
+                            && !this.jdbcSinkConfig.getDbSchema().equals("")) {
+                            del =
+                                    this.jdbcDialect.deleteData(
+                                            conn,
+                                            this.jdbcSinkConfig.getDbSchema() + "." + table,
+                                            this.jdbcSinkConfig.getDbSchema() + "." + tmpTable,
+                                            ucColumns);
+                        }
+                        else if (null != this.jdbcSinkConfig.getPreConfig().getClusterName()
+                                 && !this.jdbcSinkConfig
+                                .getPreConfig()
+                                .getClusterName()
+                                .equalsIgnoreCase("")) {
+                            del =
+                                    this.jdbcDialect.deleteDataOnCluster(
+                                            conn,
+                                            table,
+                                            tmpTable,
+                                            ucColumns,
+                                            this.jdbcSinkConfig.getPreConfig().getClusterName());
+                        }
+                        else {
+                            del = this.jdbcDialect.deleteData(conn, table, tmpTable, ucColumns);
+                        }
+                        conn.commit();
+                        midCount.setDeleteCount(del + midCount.getDeleteCount());
                     }
                     conn.commit();
-                    deleteCount = del;
                 }
-                compareTables(conn, this.table);
+                log.info("删除数据处理完毕");
+                log.info("开始对比数据");
+                compareTables(this.table);
+                log.info("数据对比完毕");
                 //处理新增数据
+                log.info("处理新增数据");
                 {
                     List<String> columns = this.columnMappers.stream().map(ColumnMapper::getSinkColumnName).collect(Collectors.toList());
                     List<String> ucs =
@@ -246,11 +250,12 @@ public class MySinkWriterUpdate extends AbstractSinkWriter<SeaTunnelRow, Void> {
                             this.jdbcDialect.insertDataCount(jdbcSinkConfig, tmpTable, ucs);
                     ResultSet resultSet = conn.createStatement().executeQuery(insertSqlCount);
                     resultSet.next();
-                    insertCount = resultSet.getLong(1);
+                    midCount.setInsertCount(resultSet.getLong(1));
                     String insertSql = this.jdbcDialect.insertData(jdbcSinkConfig, tmpTable, columns, ucs);
                     conn.createStatement().execute(insertSql);
                     conn.commit();
                 }
+                log.info("新增数据处理完毕");
             }
 
         } catch (Exception e) {
@@ -264,13 +269,13 @@ public class MySinkWriterUpdate extends AbstractSinkWriter<SeaTunnelRow, Void> {
             statisticalLog.setDbSchema(this.jdbcSinkConfig.getDbSchema());
         }
         statisticalLog.setTableName(this.jdbcSinkConfig.getTable());
-        statisticalLog.setWriteCount(writeCount);
-        statisticalLog.setQualityCount(qualityCount);
-        statisticalLog.setModifyCount(updateCount);
-        statisticalLog.setDeleteCount(deleteCount);
-        statisticalLog.setInsertCount(insertCount);
-        statisticalLog.setKeepCount(keepCount);
-        statisticalLog.setErrorCount(errorCount);
+        statisticalLog.setWriteCount(midCount.getWriteCount());
+        statisticalLog.setQualityCount(midCount.getQualityCount());
+        statisticalLog.setModifyCount(midCount.getUpdateCount());
+        statisticalLog.setDeleteCount(midCount.getDeleteCount());
+        statisticalLog.setInsertCount(midCount.getInsertCount());
+        statisticalLog.setKeepCount(midCount.getKeepCount());
+        statisticalLog.setErrorCount(midCount.getErrorCount());
         statisticalLog.setStartTime(startTime);
         statisticalLog.setEndTime(endTime);
         util.insertLog(statisticalLog);
@@ -278,7 +283,7 @@ public class MySinkWriterUpdate extends AbstractSinkWriter<SeaTunnelRow, Void> {
 
     private void insertToDbOneByOne() {
         try {
-            List<String> columns = this.columnMappers.stream().map(x -> x.getSinkColumnName()).collect(Collectors.toList());
+            List<String> columns = this.columnMappers.stream().map(ColumnMapper::getSinkColumnName).collect(Collectors.toList());
             List<String> values = this.columnMappers.stream().map(x -> "?").collect(Collectors.toList());
             String sql = jdbcDialect.insertTmpTableSql(this.jdbcSinkConfig, columns, values);
             for (SeaTunnelRow seaTunnelRow : this.cld) {
@@ -298,8 +303,8 @@ public class MySinkWriterUpdate extends AbstractSinkWriter<SeaTunnelRow, Void> {
                         psUpsert.clearBatch();
                         psUpsert.close();
                     } catch (SQLException ee) {
-                        this.errorCount++;
-                        if (this.jobContext.getIsRecordErrorData() == 1 && this.errorCount <= this.jobContext.getMaxRecordNumber() && !sqlErrorType.contains(ee.getMessage())) {
+                        midCount.setErrorCount(midCount.getErrorCount() + 1);
+                        if (this.jobContext.getIsRecordErrorData() == 1 && midCount.getErrorCount() <= this.jobContext.getMaxRecordNumber() && !sqlErrorType.contains(ee.getMessage())) {
                             LinkedHashMap<String, Object> jsonObject = new LinkedHashMap<>();
                             for (int i = 0; i < this.columnMappers.size(); i++) {
                                 jsonObject.put(this.columnMappers.get(i).getSourceColumnName(), seaTunnelRow.getField(i));
@@ -319,6 +324,8 @@ public class MySinkWriterUpdate extends AbstractSinkWriter<SeaTunnelRow, Void> {
                                 throw new RuntimeException(ex);
                             }
                         }
+                    } finally {
+                        conn.commit();
                     }
                 }
             }
@@ -401,31 +408,34 @@ public class MySinkWriterUpdate extends AbstractSinkWriter<SeaTunnelRow, Void> {
         });
     }
 
-    private void compareTables(Connection conn, String tableName) throws SQLException {
+    private void compareTables(String tableName) throws SQLException {
         int indexOfSubtask = context.getIndexOfSubtask();
         log.info("subtask:{} compare table:{}", indexOfSubtask, tableName);
         List<String> ucColumns = columnMappers.stream().filter(ColumnMapper::isUc).map(ColumnMapper::getSinkColumnName).collect(Collectors.toList());
         String querySource = this.jdbcDialect.getDataSql(this.jdbcSinkConfig, this.columnMappers, this.tmpTable);
         String queryTarget = this.jdbcDialect.getDataSql(this.jdbcSinkConfig, this.columnMappers, tableName);
-        try (Statement stmt1 = conn.createStatement(); Statement stmt2 = conn.createStatement(); ResultSet rs1 = stmt1.executeQuery(querySource); ResultSet rs2 = stmt2.executeQuery(queryTarget)) {
-            ResultSetMetaData md1 = rs1.getMetaData();
-            int columnCount = md1.getColumnCount();
-            StringBuilder sourceKey = new StringBuilder();
-            StringBuilder targetKey = new StringBuilder();
-            boolean rs1Done = false;
-            boolean rs2Done = false;
-            if (rs1.next()) {
-                for (String ucColumn : ucColumns) {
-                    String object = util.Object2String(rs1.getObject(ucColumn));
-                    sourceKey.append(object);
+        try (Connection conn1 = util.getConnection(jdbcSinkConfig); Connection conn2 =
+                util.getConnection(jdbcSinkConfig)) {
+            try (Statement stmt1 = conn1.createStatement(); Statement stmt2 = conn2.createStatement(); ResultSet rs1 =
+                    stmt1.executeQuery(querySource); ResultSet rs2 = stmt2.executeQuery(queryTarget)) {
+                ResultSetMetaData md1 = rs1.getMetaData();
+                int columnCount = md1.getColumnCount();
+                StringBuilder sourceKey = new StringBuilder();
+                StringBuilder targetKey = new StringBuilder();
+                boolean rs1Done = false;
+                boolean rs2Done = false;
+                if (rs1.next()) {
+                    for (String ucColumn : ucColumns) {
+                        String object = util.Object2String(rs1.getObject(ucColumn));
+                        sourceKey.append(object);
+                    }
                 }
-            }
-            if (rs2.next()) {
-                for (String ucColumn : ucColumns) {
-                    String object = util.Object2String(rs2.getObject(ucColumn));
-                    targetKey.append(object);
+                if (rs2.next()) {
+                    for (String ucColumn : ucColumns) {
+                        String object = util.Object2String(rs2.getObject(ucColumn));
+                        targetKey.append(object);
+                    }
                 }
-            }
 
 //            if (sourceKey.length() == 0) {
 //                log.info("全部是删除");
@@ -433,113 +443,118 @@ public class MySinkWriterUpdate extends AbstractSinkWriter<SeaTunnelRow, Void> {
 //            if (targetKey.length() == 0) {
 //                log.info("全收是新增");
 //            }
-            if (!sourceKey.toString().isEmpty() && !targetKey.toString().isEmpty()) {
-                while (true) {
-                    int result = sourceKey.toString().compareTo(targetKey.toString());
-                    if (result == 0) {
+                if (!sourceKey.toString().isEmpty() && !targetKey.toString().isEmpty()) {
+                    int hang = 1;
+                    while (true) {
+                        int result = sourceKey.toString().compareTo(targetKey.toString());
+                        if (result == 0) {
+                            if (hang % 10000 == 0) {
+                                log.info("已对比" + hang + "行");
+                            }
 //                        log.info("主键相等");
-                        //对比数据
-                        boolean change = false;
-                        for (int i = 1; i <= columnCount; i++) {
-                            Object value1 = rs1.getObject(i);
-                            Object value2 = rs2.getObject(i);
-                            if (!Objects.equals(value1, value2)) {
-                                log.info("发现字段区别:" + md1.getColumnName(i));
-                                log.info("新值: " + value1);
-                                log.info("老值: " + value2);
-                                if (ignoreColumns.contains(md1.getColumnName(i))) {
-                                    log.info("该字段已加入忽略对比:" + md1.getColumnName(i));
-                                }
-                                else {
-                                    String updateSql = jdbcDialect.updateTableSql(jdbcSinkConfig, md1.getColumnName(i), ucColumns);
-                                    PreparedStatement preparedStatement = conn.prepareStatement(updateSql);
-                                    preparedStatement.setObject(1, rs1.getObject(md1.getColumnName(i)));
-                                    for (int j = 0; j < ucColumns.size(); j++) {
-                                        preparedStatement.setObject(j + 2, rs2.getObject(ucColumns.get(j)));
+                            //对比数据
+                            boolean change = false;
+                            for (int i = 1; i <= columnCount; i++) {
+                                Object value1 = rs1.getObject(i);
+                                Object value2 = rs2.getObject(i);
+                                if (!Objects.equals(value1, value2)) {
+//                                    log.info("发现字段区别:" + md1.getColumnName(i));
+//                                    log.info("新值: " + value1);
+//                                    log.info("老值: " + value2);
+                                    if (!ignoreColumns.contains(md1.getColumnName(i))) {
+                                        String updateSql = jdbcDialect.updateTableSql(jdbcSinkConfig, md1.getColumnName(i), ucColumns);
+                                        PreparedStatement preparedStatement = conn.prepareStatement(updateSql);
+                                        preparedStatement.setObject(1, rs1.getObject(md1.getColumnName(i)));
+                                        for (int j = 0; j < ucColumns.size(); j++) {
+                                            preparedStatement.setObject(j + 2, rs2.getObject(ucColumns.get(j)));
+                                        }
+                                        preparedStatement.executeUpdate();
+                                        preparedStatement.close();
+                                        conn.commit();
+                                        change = true;
                                     }
-                                    preparedStatement.executeUpdate();
-                                    preparedStatement.close();
-                                    conn.commit();
-                                    change = true;
                                 }
                             }
-                        }
-                        if (change) {
-                            updateCount++;
-                        }
-                        else {
-                            keepCount++;
-                        }
-//                        log.info("同时往下移动");
-                        if (rs1.next()) {
-                            sourceKey.setLength(0);
-                            for (String ucColumn : ucColumns) {
-                                String object = util.Object2String(rs1.getObject(ucColumn));
-                                sourceKey.append(object);
+                            if (change) {
+                                midCount.setUpdateCount(midCount.getUpdateCount() + 1);
                             }
-                        }
-                        else {
-                            rs1Done = true;
+                            else {
+                                midCount.setKeepCount(midCount.getKeepCount() + 1);
+                            }
+//                        log.info("同时往下移动");
+                            if (rs1.next()) {
+                                hang += 1;
+                                sourceKey.setLength(0);
+                                for (String ucColumn : ucColumns) {
+                                    String object = util.Object2String(rs1.getObject(ucColumn));
+                                    sourceKey.append(object);
+                                }
+                            }
+                            else {
+                                rs1Done = true;
 //                            while (rs2.next()) {
 //                                log.info("剩下的rs2全部要删除");
 //                            }
-                            rs2Done = true;
-                        }
-                        if (rs2.next()) {
-                            targetKey.setLength(0);
-                            for (String ucColumn : ucColumns) {
-                                String object = util.Object2String(rs2.getObject(ucColumn));
-                                targetKey.append(object);
+                                rs2Done = true;
                             }
-                        }
-                        else {
-                            rs2Done = true;
+                            if (rs2.next()) {
+                                targetKey.setLength(0);
+                                for (String ucColumn : ucColumns) {
+                                    String object = util.Object2String(rs2.getObject(ucColumn));
+                                    targetKey.append(object);
+                                }
+                            }
+                            else {
+                                rs2Done = true;
 //                            while (rs1.next()) {
 //                                log.info("剩下的rs1全部要插入");
 //                            }
-                            rs1Done = true;
+                                rs1Done = true;
+                            }
                         }
-                    }
-                    if (result > 0) {
+                        if (result > 0) {
 //                        log.info("rs2需要往下移,删除rs2");
-                        if (rs2.next()) {
-                            targetKey.setLength(0);
-                            for (String ucColumn : ucColumns) {
-                                String object = util.Object2String(rs2.getObject(ucColumn));
-                                targetKey.append(object);
+                            if (rs2.next()) {
+                                targetKey.setLength(0);
+                                for (String ucColumn : ucColumns) {
+                                    String object = util.Object2String(rs2.getObject(ucColumn));
+                                    targetKey.append(object);
+                                }
                             }
-                        }
-                        else {
-                            rs2Done = true;
+                            else {
+                                rs2Done = true;
 //                            while (rs1.next()) {
 //                                log.info("剩下的rs1全部要插入");
 //                            }
-                            rs1Done = true;
+                                rs1Done = true;
+                            }
                         }
-                    }
-                    if (result < 0) {
+                        if (result < 0) {
 //                        log.info("rs1需要往下移,插入rs1");
 //                        log.info("sourceKey " + sourceKey);
-                        if (rs1.next()) {
-                            sourceKey.setLength(0);
-                            for (String ucColumn : ucColumns) {
-                                String object = util.Object2String(rs1.getObject(ucColumn));
-                                sourceKey.append(object);
+                            if (rs1.next()) {
+                                sourceKey.setLength(0);
+                                for (String ucColumn : ucColumns) {
+                                    String object = util.Object2String(rs1.getObject(ucColumn));
+                                    sourceKey.append(object);
+                                }
                             }
-                        }
-                        else {
-                            rs1Done = true;
+                            else {
+                                rs1Done = true;
 //                            while (rs2.next()) {
 //                                log.info("剩下的rs2全部要删除");
 //                            }
-                            rs2Done = true;
+                                rs2Done = true;
+                            }
                         }
-                    }
-                    if (rs1Done && rs2Done) {
-                        break;
+                        if (rs1Done && rs2Done) {
+                            break;
+                        }
                     }
                 }
             }
+        } catch (SQLException e) {
+            throw new RuntimeException(e);
         }
 
     }

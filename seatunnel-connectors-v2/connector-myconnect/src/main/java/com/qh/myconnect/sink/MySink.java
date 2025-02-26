@@ -1,5 +1,6 @@
 package com.qh.myconnect.sink;
 
+import com.qh.myconnect.config.Util;
 import org.apache.seatunnel.api.common.JobContext;
 import org.apache.seatunnel.api.configuration.ReadonlyConfig;
 import org.apache.seatunnel.api.sink.SeaTunnelSink;
@@ -49,20 +50,17 @@ public class MySink extends AbstractSimpleSink<SeaTunnelRow, Void> {
         this.seaTunnelRowType = seaTunnelRowType;
         this.config = config;
         this.jdbcSinkConfig = jdbcSinkConfig;
-        try (Connection conn =
-                     DriverManager.getConnection(
-                             jdbcSinkConfig.getUrl(),
-                             jdbcSinkConfig.getUser(),
-                             jdbcSinkConfig.getPassWord())) {
+        try (Connection conn = new Util().getConnection(this.jdbcSinkConfig)) {
             JdbcDialect jdbcDialect = JdbcDialectFactory.getJdbcDialect(jdbcSinkConfig.getDbType());
             if (jdbcSinkConfig.getDbType().equalsIgnoreCase("oracle")
                 || jdbcSinkConfig.getDbType().equalsIgnoreCase("pgsql")
                 || jdbcSinkConfig.getDbType().equalsIgnoreCase("sqlserver")
+                || jdbcSinkConfig.getDbType().equalsIgnoreCase("trino")
             ) {
                 this.tableCount =
                         jdbcDialect.getTableCount(
                                 conn,
-                                jdbcSinkConfig.getDbSchema() , jdbcSinkConfig.getTable());
+                                jdbcSinkConfig.getDbSchema(), jdbcSinkConfig.getTable());
             }
             else {
                 this.tableCount = jdbcDialect.getTableCount(conn, jdbcSinkConfig.getTable());
@@ -81,7 +79,6 @@ public class MySink extends AbstractSimpleSink<SeaTunnelRow, Void> {
     }
 
 
-
     @Override
     public void setTypeInfo(SeaTunnelRowType seaTunnelRowType) {
         this.seaTunnelRowType = seaTunnelRowType;
@@ -98,9 +95,8 @@ public class MySink extends AbstractSimpleSink<SeaTunnelRow, Void> {
         try {
             JdbcSinkConfig jdbcSinkConfig = JdbcSinkConfig.of(config);
             PreConfig preConfig = jdbcSinkConfig.getPreConfig();
-            try (Connection conn = DriverManager.getConnection(jdbcSinkConfig.getUrl(), jdbcSinkConfig.getUser(),
-                    jdbcSinkConfig.getPassWord())) {
-                log.info("执行了一次预定动作");
+            try (Connection conn = new Util().getConnection(this.jdbcSinkConfig)) {
+                log.info("开始执行预定动作");
                 preConfig.doPreConfig(conn, jdbcSinkConfig);
             } catch (SQLException e) {
                 throw new RuntimeException(e);

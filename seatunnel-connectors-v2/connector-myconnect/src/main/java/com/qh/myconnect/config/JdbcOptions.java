@@ -112,6 +112,7 @@ public interface JdbcOptions {
     Option<String> TABLE =
             Options.key("table").stringType().noDefaultValue().withDescription("table");
 
+
     Option<List<String>> PRIMARY_KEYS =
             Options.key("primary_keys").listType().noDefaultValue().withDescription("primary keys");
 
@@ -173,5 +174,6 @@ public interface JdbcOptions {
             .booleanType()
             .defaultValue(false)
             .withDescription("开启质量检测数据过滤");
+
 
 }

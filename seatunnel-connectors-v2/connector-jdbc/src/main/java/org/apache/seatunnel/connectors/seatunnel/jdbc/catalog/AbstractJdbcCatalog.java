@@ -44,8 +44,12 @@ import org.apache.commons.lang3.StringUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.net.MalformedURLException;
+import java.net.URL;
+import java.net.URLClassLoader;
 import java.sql.Connection;
 import java.sql.DatabaseMetaData;
+import java.sql.Driver;
 import java.sql.DriverManager;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
@@ -58,9 +62,10 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
-
+import org.apache.seatunnel.connectors.seatunnel.jdbc.utils.JdbcUtils;
 import static com.google.common.base.Preconditions.checkArgument;
 import static com.google.common.base.Preconditions.checkNotNull;
 
@@ -116,11 +121,24 @@ public abstract class AbstractJdbcCatalog implements Catalog {
             return connectionMap.get(url);
         }
         try {
+            if (url.startsWith("jdbc:mysql") && url.endsWith("version=5")) {
+                Driver driver = null;
+                Connection connection = null;
+                Properties info = new Properties();
+                info.put("user", username);
+                info.put("password", pwd);
+                String seatTunnelHome = System.getenv("SEATUNNEL_HOME");
+                driver = JdbcUtils.getDriver(seatTunnelHome + "/lib_old_version/mysql-connector-java-5.1.49.jar", "com.mysql.jdbc.Driver");
+                connection = driver.connect(url, info);
+                return connection;
+            }
             Connection connection = DriverManager.getConnection(url, username, pwd);
             connectionMap.put(url, connection);
             return connection;
         } catch (SQLException e) {
             throw new CatalogException(String.format("Failed connecting to %s via JDBC.", url), e);
+        } catch (MalformedURLException e) {
+            throw new RuntimeException(e);
         }
     }
 
@@ -169,7 +187,8 @@ public abstract class AbstractJdbcCatalog implements Catalog {
         String dbUrl;
         if (StringUtils.isNotBlank(tablePath.getDatabaseName())) {
             dbUrl = getUrlFromDatabaseName(tablePath.getDatabaseName());
-        } else {
+        }
+        else {
             dbUrl = getUrlFromDatabaseName(defaultDatabase);
         }
         Connection conn = getConnection(dbUrl);
@@ -178,7 +197,7 @@ public abstract class AbstractJdbcCatalog implements Catalog {
             Optional<PrimaryKey> primaryKey = getPrimaryKey(metaData, tablePath);
             List<ConstraintKey> constraintKeys = getConstraintKeys(metaData, tablePath);
             try (PreparedStatement ps = conn.prepareStatement(getSelectColumnsSql(tablePath));
-                    ResultSet resultSet = ps.executeQuery()) {
+                 ResultSet resultSet = ps.executeQuery()) {
 
                 TableSchema.Builder builder = TableSchema.builder();
                 buildColumnsWithErrorCheck(tablePath, resultSet, builder);
@@ -214,7 +233,8 @@ public abstract class AbstractJdbcCatalog implements Catalog {
                 if (e.getSeaTunnelErrorCode()
                         .equals(CommonErrorCode.CONVERT_TO_SEATUNNEL_TYPE_ERROR_SIMPLE)) {
                     unsupported.put(e.getParams().get("field"), e.getParams().get("dataType"));
-                } else {
+                }
+                else {
                     throw e;
                 }
             }
@@ -319,7 +339,7 @@ public abstract class AbstractJdbcCatalog implements Catalog {
     public boolean tableExists(TablePath tablePath) throws CatalogException {
         try {
             return databaseExists(tablePath.getDatabaseName())
-                    && listTables(tablePath.getDatabaseName()).contains(getTableName(tablePath));
+                   && listTables(tablePath.getDatabaseName()).contains(getTableName(tablePath));
         } catch (DatabaseNotExistException e) {
             return false;
         }
@@ -586,15 +606,20 @@ public abstract class AbstractJdbcCatalog implements Catalog {
         if (actionType == ActionType.CREATE_TABLE) {
             checkArgument(catalogTable.isPresent(), "CatalogTable cannot be null");
             return new SQLPreviewResult(getCreateTableSql(tablePath, catalogTable.get()));
-        } else if (actionType == ActionType.DROP_TABLE) {
+        }
+        else if (actionType == ActionType.DROP_TABLE) {
             return new SQLPreviewResult(getDropTableSql(tablePath));
-        } else if (actionType == ActionType.TRUNCATE_TABLE) {
+        }
+        else if (actionType == ActionType.TRUNCATE_TABLE) {
             return new SQLPreviewResult(getTruncateTableSql(tablePath));
-        } else if (actionType == ActionType.CREATE_DATABASE) {
+        }
+        else if (actionType == ActionType.CREATE_DATABASE) {
             return new SQLPreviewResult(getCreateDatabaseSql(tablePath.getDatabaseName()));
-        } else if (actionType == ActionType.DROP_DATABASE) {
+        }
+        else if (actionType == ActionType.DROP_DATABASE) {
             return new SQLPreviewResult(getDropDatabaseSql(tablePath.getDatabaseName()));
-        } else {
+        }
+        else {
             throw new UnsupportedOperationException("Unsupported action type: " + actionType);
         }
     }

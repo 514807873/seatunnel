@@ -1,7 +1,9 @@
 package com.qh.myconnect.sink;
 
 import com.alibaba.fastjson2.JSONWriter;
+import com.qh.myconnect.config.MidCount;
 import com.qh.myconnect.converter.CodeConverter;
+import com.qh.myconnect.dialect.trino.TrinoDialect;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.seatunnel.api.common.JobContext;
 import org.apache.seatunnel.api.configuration.ReadonlyConfig;
@@ -45,63 +47,68 @@ import java.util.stream.Collectors;
 @Slf4j
 public class MySinkWriterComplete extends AbstractSinkWriter<SeaTunnelRow, Void> {
     private final SeaTunnelRowType sourceRowType;
-    private final Context context;
-    private List<SeaTunnelRow> cld = new ArrayList<>();
-    private Long writeCount = 0L;
-
-    private Long insertCount = 0L;
-
-    private Long deleteCount = 0l;
-
-    private Long errorCount = 0L;
-
-    private Long qualityCount = 0L;
+    private final List<SeaTunnelRow> cld = new ArrayList<>();
+    private final MidCount midCount = new MidCount();
     private final JdbcSinkConfig jdbcSinkConfig;
-    private JobContext jobContext;
+    private final JobContext jobContext;
 
-    private JdbcDialect jdbcDialect;
+    private final JdbcDialect jdbcDialect;
 
-    private LocalDateTime startTime;
-    private Map<String, String> metaDataHash;
+    private final LocalDateTime startTime;
+    private final Map<String, String> metaDataHash;
 
-    private Connection conn;
+    private final Connection conn;
 
-    private String table;
-    private List<ColumnMapper> columnMappers = new ArrayList<>();
+    private final List<ColumnMapper> columnMappers = new ArrayList<>();
 
     private SeaTunnelRowType sinkTableRowType;
 
     private final Util util = new Util();
-    private int batchSize = 1000;
 
-    private Long tableCount;
+    private final Long tableCount;
 
-    private PreConfig preConfig;
+    private final PreConfig preConfig;
 
     private final Integer currentTaskId;
 
-    private Set sqlErrorType = new HashSet();
+    private final Set<String> sqlErrorType = new HashSet();
 
     private CodeConverter converter = new CodeConverter();
+    private boolean isTrino = false;
 
     public MySinkWriterComplete(SeaTunnelRowType seaTunnelRowType, Context context, ReadonlyConfig config, JobContext jobContext, Long tableCount) throws SQLException {
+
         this.jobContext = jobContext;
         this.sourceRowType = seaTunnelRowType;
-        this.context = context;
         this.currentTaskId = context.getIndexOfSubtask();
         log.info("currentTaskId:" + this.currentTaskId);
         this.jdbcSinkConfig = JdbcSinkConfig.of(config);
-        this.table = this.jdbcSinkConfig.getTable();
+        if (jdbcSinkConfig.getDriver().equalsIgnoreCase("com.github.housepower.jdbc.ClickHouseDriver")) {
+            this.jdbcSinkConfig.setBatchSize(50000);
+        }
+        if (jdbcSinkConfig.getBatchSize() == 0) {
+            this.jdbcSinkConfig.setBatchSize(2000);
+        }
         this.preConfig = jdbcSinkConfig.getPreConfig();
         this.startTime = LocalDateTime.now();
         this.jdbcDialect = JdbcDialectFactory.getJdbcDialect(this.jdbcSinkConfig.getDbType());
         this.conn = util.getConnection(this.jdbcSinkConfig);
         this.conn.setAutoCommit(false);
+        if (jdbcDialect instanceof TrinoDialect) {
+            isTrino = true;
+            try (Statement statement = conn.createStatement()) {
+                String setSessionQuery = "SET SESSION hive.insert_existing_partitions_behavior = 'APPEND'";
+                statement.execute(setSessionQuery);
+                this.conn.setAutoCommit(true);
+            } catch (Exception e) {
+                throw new RuntimeException("Failed to set session", e);
+            }
+        }
         this.sinkTableRowType = util.initTableField(conn, this.jdbcDialect, this.jdbcSinkConfig);
         this.initColumnMappers(this.jdbcSinkConfig, this.sourceRowType, this.sinkTableRowType, conn);
         this.tableCount = tableCount;
         if (this.preConfig.isCleanTableWhenComplete() && this.preConfig.isCleanTableWhenCompleteNoDataIn()) {
-            this.deleteCount = this.tableCount;
+            midCount.setDeleteCount(this.tableCount);
         }
         String sqlQuery = jdbcDialect.getSinkQueryUpdate(this.columnMappers, 0, jdbcSinkConfig);
         PreparedStatement preparedStatementQuery = conn.prepareStatement(sqlQuery);
@@ -112,17 +119,19 @@ public class MySinkWriterComplete extends AbstractSinkWriter<SeaTunnelRow, Void>
             metaDataHash.put(metaData.getColumnName(i + 1), metaData.getColumnTypeName(i + 1));
         }
         this.metaDataHash = metaDataHash;
-        conn.commit();
+        if (!isTrino) {
+            conn.commit();
+        }
     }
 
     @Override
     public void write(SeaTunnelRow element) throws IOException {
-        this.writeCount++;
+        midCount.setWriteCount(midCount.getWriteCount() + 1);
         if (this.jdbcSinkConfig.isOpenQuality()) {
 //            this.qualityCount++;
 //            return;
         }
-        if (this.writeCount == 1 && this.preConfig.isCleanTableWhenComplete()) {
+        if (midCount.getWriteCount() == 1 && this.preConfig.isCleanTableWhenComplete()) {
             TruncateTable truncateTable = new TruncateTable();
             truncateTable.setFlinkJobId(this.jobContext.getJobId());
             truncateTable.setDataSourceId(this.jdbcSinkConfig.getDbDatasourceId());
@@ -145,11 +154,20 @@ public class MySinkWriterComplete extends AbstractSinkWriter<SeaTunnelRow, Void>
                 }
             }
             util.truncateTable(truncateTable);
-            this.deleteCount = this.tableCount;
+            midCount.setDeleteCount(this.tableCount);
         }
         this.cld.add(element);
-        if (this.writeCount.longValue() % batchSize == 0 || this.jobContext.getJobMode().equals(JobMode.STREAMING)) {
-            this.insertToDb();
+        if (midCount.getWriteCount() % this.jdbcSinkConfig.getBatchSize() == 0 || this.jobContext.getJobMode().equals(JobMode.STREAMING)) {
+            this.jdbcDialect.insertToDb(this.columnMappers,
+                    this.jdbcSinkConfig,
+                    this.conn,
+                    this.metaDataHash,
+                    this.cld,
+                    this.util,
+                    this.jobContext,
+                    this.sqlErrorType,
+                    midCount
+            );
             cld.clear();
         }
     }
@@ -157,59 +175,20 @@ public class MySinkWriterComplete extends AbstractSinkWriter<SeaTunnelRow, Void>
     @Override
     public void close() {
         try {
-            this.insertToDb();
-            conn.close();
+            this.jdbcDialect.insertToDb(this.columnMappers,
+                    this.jdbcSinkConfig,
+                    this.conn,
+                    this.metaDataHash,
+                    this.cld,
+                    this.util,
+                    this.jobContext,
+                    this.sqlErrorType,
+                    midCount
+            );
             statisticalResults();
+            conn.close();
         } catch (Exception e) {
             throw new RuntimeException(e);
-        }
-    }
-
-    public void insertToDb() {
-        Long tmpInsertCount = null;
-        String sql = null;
-        try {
-            List<String> columns = this.columnMappers.stream().map(x -> x.getSinkColumnName()).collect(Collectors.toList());
-            List<String> values = this.columnMappers.stream().map(x -> "?").collect(Collectors.toList());
-            sql = jdbcDialect.insertTableSql(this.jdbcSinkConfig, columns, values);
-            PreparedStatement psUpsert = conn.prepareStatement(sql);
-            tmpInsertCount = this.insertCount;
-            boolean hasError = false;
-            for (SeaTunnelRow seaTunnelRow : this.cld) {
-                if (seaTunnelRow != null) {
-                    for (int i = 0; i < this.columnMappers.size(); i++) {
-                        Integer valueIndex = this.columnMappers.get(i).getSourceRowPosition();
-                        Object field = this.columnMappers.get(i).getConverter().apply(seaTunnelRow.getField(valueIndex));
-                        String column = columns.get(i);
-                        String dbType = metaDataHash.get(column);
-                        jdbcDialect.setPreparedStatementValueByDbType(i + 1, psUpsert, dbType, util.Object2String(field));
-                    }
-                    this.insertCount++;
-                    try {
-                        psUpsert.addBatch();
-                    } catch (SQLException e) {
-                        hasError = true;
-                        break;
-                    }
-                }
-            }
-            if (hasError) {
-                throw new RuntimeException();
-            }
-            psUpsert.executeBatch();
-            conn.commit();
-            psUpsert.clearBatch();
-            psUpsert.close();
-
-        } catch (Exception e) {
-            log.error("错误sql:" + sql,e);
-            try {
-                conn.rollback();
-                this.insertCount = tmpInsertCount;
-            } catch (SQLException ex) {
-                throw new RuntimeException(ex);
-            }
-            insertToDbOneByOne();
         }
     }
 
@@ -223,68 +202,16 @@ public class MySinkWriterComplete extends AbstractSinkWriter<SeaTunnelRow, Void>
             statisticalLog.setDbSchema(this.jdbcSinkConfig.getDbSchema());
         }
         statisticalLog.setTableName(this.jdbcSinkConfig.getTable());
-        statisticalLog.setWriteCount(writeCount);
-        statisticalLog.setQualityCount(qualityCount);
+        statisticalLog.setWriteCount(midCount.getWriteCount());
+        statisticalLog.setQualityCount(midCount.getQualityCount());
         statisticalLog.setModifyCount(0L);
-        statisticalLog.setDeleteCount(deleteCount);
-        statisticalLog.setInsertCount(this.insertCount);
+        statisticalLog.setDeleteCount(midCount.getDeleteCount());
+        statisticalLog.setInsertCount(midCount.getInsertCount());
         statisticalLog.setKeepCount(0L);
-        statisticalLog.setErrorCount(errorCount);
+        statisticalLog.setErrorCount(midCount.getErrorCount());
         statisticalLog.setStartTime(startTime);
         statisticalLog.setEndTime(endTime);
         util.insertLog(statisticalLog);
-    }
-
-    private void insertToDbOneByOne() {
-        try {
-            List<String> columns = this.columnMappers.stream().map(x -> x.getSinkColumnName()).collect(Collectors.toList());
-            List<String> values = this.columnMappers.stream().map(x -> "?").collect(Collectors.toList());
-            String sql = jdbcDialect.insertTableSql(this.jdbcSinkConfig, columns, values);
-            for (SeaTunnelRow seaTunnelRow : this.cld) {
-                if (seaTunnelRow != null) {
-                    PreparedStatement psUpsert = conn.prepareStatement(sql);
-                    for (int i = 0; i < this.columnMappers.size(); i++) {
-                        Integer valueIndex = this.columnMappers.get(i).getSourceRowPosition();
-                        Object field = this.columnMappers.get(i).getConverter().apply(seaTunnelRow.getField(valueIndex));
-                        String column = columns.get(i);
-                        String dbType = metaDataHash.get(column);
-                        jdbcDialect.setPreparedStatementValueByDbType(i + 1, psUpsert, dbType, util.Object2String(field));
-                    }
-                    try {
-                        psUpsert.addBatch();
-                        psUpsert.executeBatch();
-                        conn.commit();
-                        psUpsert.clearBatch();
-                        psUpsert.close();
-                        this.insertCount++;
-                    } catch (SQLException ee) {
-                        this.errorCount++;
-                        if (this.jobContext.getIsRecordErrorData() == 1 && this.errorCount <= this.jobContext.getMaxRecordNumber() && !sqlErrorType.contains(ee.getMessage())) {
-                            LinkedHashMap<String, Object> jsonObject = new LinkedHashMap<>();
-                            for (int i = 0; i < this.columnMappers.size(); i++) {
-                                jsonObject.put(this.columnMappers.get(i).getSourceColumnName(), seaTunnelRow.getField(i));
-                            }
-                            log.info(JSON.toJSONString(jsonObject, JSONWriter.Feature.WriteMapNullValue, JSONWriter.Feature.WriteNullListAsEmpty));
-                            SeaTunnelJobsHistoryErrorRecord errorRecord = new SeaTunnelJobsHistoryErrorRecord();
-                            errorRecord.setFlinkJobId(this.jobContext.getJobId());
-                            errorRecord.setDataSourceId(jdbcSinkConfig.getDbDatasourceId());
-                            errorRecord.setDbSchema(jdbcSinkConfig.getDbSchema());
-                            errorRecord.setTableName(jdbcSinkConfig.getTable());
-                            errorRecord.setErrorData(JSON.toJSONString(jsonObject, JSONWriter.Feature.WriteMapNullValue, JSONWriter.Feature.WriteNullListAsEmpty));
-                            errorRecord.setErrorMessage(ee.getMessage());
-                            sqlErrorType.add(ee.getMessage());
-                            try {
-                                util.insertErrorData(errorRecord);
-                            } catch (Exception ex) {
-                                throw new RuntimeException(ex);
-                            }
-                        }
-                    }
-                }
-            }
-        } catch (SQLException e) {
-            throw new RuntimeException(e);
-        }
     }
 
     private boolean containsAtLeastTwoDotsRegex(String str) {

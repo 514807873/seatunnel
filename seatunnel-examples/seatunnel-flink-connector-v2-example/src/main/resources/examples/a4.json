@@ -1,0 +1,135 @@
+{
+  "env": {
+    "job.mode": "STREAMING",
+    "isRecordErrorData": 0,
+    "execution.parallelism": 1,
+    "maxRecordNumber": 0,
+    "job.name": "sql实时接口2",
+    "checkpoint.interval": 5000
+  },
+  "source": [
+    {
+      "plugin_name": "SqlCdc",
+      "query": "select * from score_src",
+      "db_type": "MYSQL",
+      "url": "jdbc:mysql://111.172.106.210:60173/DB_SOURCE?useUnicode=yes&characterEncoding=UTF-8&useSSL=false&serverTimezone=UTC",
+      "driver": "com.mysql.cj.jdbc.Driver",
+      "user": "root",
+      "password": "XIJIAgreat2020!$",
+      "db_datasource_id": "1797079933655703553",
+      "database": "DB_SOURCE",
+      "result_columns": [
+        {
+          "decimalDigit": 0,
+          "size": 255,
+          "name": "SNO",
+          "type": "CHAR",
+          "sourceColumn": "1797079933655703553.DB_SOURCE.score_src.sno"
+        },
+        {
+          "decimalDigit": 0,
+          "size": 255,
+          "name": "COURSE",
+          "type": "CHAR",
+          "sourceColumn": "1797079933655703553.DB_SOURCE.score_src.course"
+        },
+        {
+          "decimalDigit": 0,
+          "size": 255,
+          "name": "SCORE",
+          "type": "CHAR",
+          "sourceColumn": "1797079933655703553.DB_SOURCE.score_src.score"
+        },
+        {
+          "decimalDigit": 0,
+          "size": 23,
+          "name": "BDATE",
+          "type": "TIMESTAMP",
+          "sourceColumn": "1797079933655703553.DB_SOURCE.score_src.bdate"
+        },
+        {
+          "decimalDigit": 0,
+          "size": 10,
+          "name": "ID",
+          "type": "INT",
+          "sourceColumn": "1797079933655703553.DB_SOURCE.score_src.id"
+        }
+      ],
+      "result_table_name": "t1"
+    }
+  ],
+  "transform": [
+    {
+      "plugin_name": "Encrypt",
+      "result_columns": [
+        {
+          "decimalDigit": 0,
+          "size": 255,
+          "name": "SNO",
+          "type": "CHAR",
+          "sourceColumn": "1797079933655703553.DB_SOURCE.score_src.sno"
+        },
+        {
+          "decimalDigit": 0,
+          "size": 255,
+          "name": "COURSE",
+          "type": "CHAR",
+          "sourceColumn": "1797079933655703553.DB_SOURCE.score_src.course"
+        },
+        {
+          "decimalDigit": 0,
+          "size": 255,
+          "name": "SCORE",
+          "type": "CHAR",
+          "sourceColumn": "1797079933655703553.DB_SOURCE.score_src.score"
+        },
+        {
+          "decimalDigit": 0,
+          "size": 23,
+          "name": "BDATE",
+          "type": "TIMESTAMP",
+          "sourceColumn": "1797079933655703553.DB_SOURCE.score_src.bdate"
+        },
+        {
+          "decimalDigit": 0,
+          "size": 10,
+          "name": "ID",
+          "type": "INT",
+          "sourceColumn": "1797079933655703553.DB_SOURCE.score_src.id"
+        }
+      ],
+      "encrypt_columns": [
+        "SCORE"
+      ],
+      "source_table_name": [
+        "t1"
+      ],
+      "result_table_name": "t3"
+    }
+  ],
+  "sink": [
+    {
+      "plugin_name": "JDBC",
+      "generate_sink_sql": true,
+      "primary_keys": [
+        "ID"
+      ],
+      "db_type": "ORACLE",
+      "url": "jdbc:oracle:thin:@111.172.106.210:41521/ORCL",
+      "driver": "oracle.jdbc.driver.OracleDriver",
+      "user": "scott",
+      "database": "ORCL",
+      "password": "oracle",
+      "db_datasource_id": "1821383696019935233",
+      "dbSchema": "TESTSS",
+      "table": "TESTSS.TEST2",
+      "field_mapper": {
+        "ID": "ID",
+        "SCORE": "NAME_CSE"
+      },
+      "source_table_name": [
+        "t3"
+      ]
+    }
+  ]
+}

@@ -17,16 +17,21 @@
 
 package org.apache.seatunnel.connectors.seatunnel.jdbc.internal.connection;
 
+import org.apache.seatunnel.connectors.seatunnel.jdbc.catalog.utils.CatalogUtils;
 import org.apache.seatunnel.connectors.seatunnel.jdbc.config.JdbcConnectionConfig;
 import org.apache.seatunnel.connectors.seatunnel.jdbc.exception.JdbcConnectorErrorCode;
 import org.apache.seatunnel.connectors.seatunnel.jdbc.exception.JdbcConnectorException;
 
+import org.apache.seatunnel.connectors.seatunnel.jdbc.utils.JdbcUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import lombok.NonNull;
 
+import java.io.File;
 import java.io.Serializable;
+import java.net.URL;
+import java.net.URLClassLoader;
 import java.sql.Connection;
 import java.sql.Driver;
 import java.sql.DriverManager;
@@ -36,7 +41,9 @@ import java.util.Properties;
 
 import static com.google.common.base.Preconditions.checkNotNull;
 
-/** Simple JDBC connection provider. */
+/**
+ * Simple JDBC connection provider.
+ */
 public class SimpleJdbcConnectionProvider implements JdbcConnectionProvider, Serializable {
 
     private static final Logger LOG = LoggerFactory.getLogger(SimpleJdbcConnectionProvider.class);
@@ -60,25 +67,33 @@ public class SimpleJdbcConnectionProvider implements JdbcConnectionProvider, Ser
     @Override
     public boolean isConnectionValid() throws SQLException {
         return connection != null
-                && connection.isValid(jdbcConfig.getConnectionCheckTimeoutSeconds());
+               && connection.isValid(jdbcConfig.getConnectionCheckTimeoutSeconds());
     }
 
     private static Driver loadDriver(String driverName) throws ClassNotFoundException {
-        checkNotNull(driverName);
-        Enumeration<Driver> drivers = DriverManager.getDrivers();
-        while (drivers.hasMoreElements()) {
-            Driver driver = drivers.nextElement();
-            if (driver.getClass().getName().equals(driverName)) {
-                return driver;
+        if (!driverName.equalsIgnoreCase("com.mysql.jdbc.Driver") && !driverName.equalsIgnoreCase("com.mysql.cj.jdbc.Driver")) {
+            LOG.info("Loaded driver {}", driverName);
+            checkNotNull(driverName);
+            Enumeration<Driver> drivers = DriverManager.getDrivers();
+            while (drivers.hasMoreElements()) {
+                Driver driver = drivers.nextElement();
+                if (driver.getClass().getName().equals(driverName)) {
+                    return driver;
+                }
             }
         }
+
 
         // We could reach here for reasons:
         // * Class loader hell of DriverManager(see JDK-8146872).
         // * driver is not installed as a service provider.
-        Class<?> clazz =
-                Class.forName(driverName, true, Thread.currentThread().getContextClassLoader());
         try {
+            if (driverName.equalsIgnoreCase("com.mysql.jdbc.Driver")) {
+                String seatTunnelHome = System.getenv("SEATUNNEL_HOME");
+                return JdbcUtils.getDriver(seatTunnelHome + "/lib_old_version/mysql-connector-java-5.1.49.jar", "com.mysql.jdbc.Driver");
+            }
+            Class<?> clazz =
+                    Class.forName(driverName, true, Thread.currentThread().getContextClassLoader());
             return (Driver) clazz.getDeclaredConstructor().newInstance();
         } catch (Exception ex) {
             throw new JdbcConnectorException(
@@ -90,6 +105,7 @@ public class SimpleJdbcConnectionProvider implements JdbcConnectionProvider, Ser
 
     protected Driver getLoadedDriver() throws SQLException, ClassNotFoundException {
         if (loadedDriver == null) {
+            LOG.info("Loaded driver {}", jdbcConfig.getDriverName());
             loadedDriver = loadDriver(jdbcConfig.getDriverName());
         }
         return loadedDriver;
