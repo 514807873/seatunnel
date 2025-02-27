@@ -19,6 +19,7 @@ package com.qh.myconnect.dialect.pgsql;
 
 import com.alibaba.fastjson2.JSON;
 import com.alibaba.fastjson2.JSONObject;
+import com.qh.myconnect.config.PreConfig;
 import org.apache.commons.lang3.StringUtils;
 
 import org.stringtemplate.v4.ST;
@@ -35,6 +36,8 @@ import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.ResultSetMetaData;
 import java.sql.SQLException;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -228,6 +231,48 @@ public class PostgresDialect implements JdbcDialect {
         template.add("table", StringUtils.join(Arrays.stream(table.split("\\.")).map(x -> "\"" + x + "\"").collect(Collectors.toList()), "."));
         template.add("tmpTable", StringUtils.join(Arrays.stream(ucTable.split("\\.")).map(x -> "\"" + x + "\"").collect(Collectors.toList()), "."));
         template.add("pks", newColumnMappers);
+        PreparedStatement preparedStatement = null;
+        int del = 0;
+        try {
+            preparedStatement = connection.prepareStatement(template.render());
+            del = preparedStatement.executeUpdate();
+            preparedStatement.close();
+        } catch (SQLException e) {
+            throw new RuntimeException(e);
+        }
+        return del;
+    }
+
+    public int deleteDataLogic(
+            Connection connection,
+            String table,
+            String ucTable,
+            List<ColumnMapper> ucColumns,
+            PreConfig preConfig) {
+        String operateColumnName = preConfig.getRecordOperateColumnName();
+        String timestampColumnName = preConfig.getAutoTimestampColumnName();
+        LocalDateTime now = LocalDateTime.now();
+        DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
+        String timestampValue = now.format(formatter);
+        String jsonString = JSON.toJSONString(ucColumns);
+        List<ColumnMapper> newColumnMappers = JSON.parseArray(jsonString, ColumnMapper.class);
+        newColumnMappers.forEach(
+                x -> {
+                    x.setSinkColumnName(this.quoteIdentifier(x.getSinkColumnName()));
+                });
+        String delSql =
+                "update  <table> a   "
+                + " set a.<operateColumnName> = 'D', a.<timestampColumnName> = '<timestampValue>' "
+                + " where not exists "
+                + "       (select  <pks:{pk | <pk.sinkColumnName>}; separator=\" , \"> from <tmpTable> b where <pks:{pk | a.<pk.sinkColumnName>=b.<pk.sinkColumnName> }; separator=\" and \">  ) "
+                + " and <operateColumnName> !='D'";
+        ST template = new ST(delSql);
+        template.add("table", StringUtils.join(Arrays.stream(table.split("\\.")).map(x -> "\"" + x + "\"").collect(Collectors.toList()), "."));
+        template.add("tmpTable", StringUtils.join(Arrays.stream(ucTable.split("\\.")).map(x -> "\"" + x + "\"").collect(Collectors.toList()), "."));
+        template.add("pks", newColumnMappers);
+        template.add("operateColumnName", operateColumnName);
+        template.add("timestampColumnName", timestampColumnName);
+        template.add("timestampValue", timestampValue);
         PreparedStatement preparedStatement = null;
         int del = 0;
         try {

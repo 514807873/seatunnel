@@ -17,6 +17,7 @@
 
 package com.qh.myconnect.dialect.oracle;
 
+import com.qh.myconnect.config.PreConfig;
 import org.apache.seatunnel.common.exception.CommonErrorCode;
 
 import org.apache.commons.lang3.StringUtils;
@@ -299,7 +300,7 @@ public class OracleDialect implements JdbcDialect {
                 "insert into "
                 + jdbcSinkConfig.getDbSchema()
                 + "."
-                +"XJ$_" + jdbcSinkConfig.getTable()
+                + "XJ$_" + jdbcSinkConfig.getTable()
                 + String.format("(%s)", StringUtils.join(newColumns, ","))
                 + String.format("values (%s)", StringUtils.join(values, ","));
         return sql;
@@ -315,6 +316,42 @@ public class OracleDialect implements JdbcDialect {
         template.add("table", StringUtils.join(table.split("\\."), "."));
         template.add("tmpTable", ucTable);
         template.add("pks", ucColumns);
+        PreparedStatement preparedStatement = null;
+        int del = 0;
+        try {
+            preparedStatement = connection.prepareStatement(template.render());
+            del = preparedStatement.executeUpdate();
+            preparedStatement.close();
+        } catch (SQLException e) {
+            throw new RuntimeException(e);
+        }
+        return del;
+    }
+
+    public int deleteDataLogic(
+            Connection connection,
+            String table,
+            String ucTable,
+            List<ColumnMapper> ucColumns,
+            PreConfig preConfig) {
+        String operateColumnName = preConfig.getRecordOperateColumnName();
+        String timestampColumnName = preConfig.getAutoTimestampColumnName();
+        LocalDateTime now = LocalDateTime.now();
+        DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
+        String timestampValue = now.format(formatter);
+        String delSql =
+                "update  <table> a   "
+                + " set  <operateColumnName> = 'D' , <timestampColumnName> = '<timestampValue>' "
+                + " where not exists "
+                + "       (select  <pks:{pk | <pk.sinkColumnName>}; separator=\" , \"> from <tmpTable> b where <pks:{pk | a.<pk.sinkColumnName>=b.<pk.sinkColumnName> }; separator=\" and \">  ) "
+                + " and <operateColumnName> !='D'";
+        ST template = new ST(delSql);
+        template.add("table", StringUtils.join(table.split("\\."), "."));
+        template.add("tmpTable", ucTable);
+        template.add("pks", ucColumns);
+        template.add("operateColumnName", operateColumnName);
+        template.add("timestampColumnName", timestampColumnName);
+        template.add("timestampValue", timestampValue);
         PreparedStatement preparedStatement = null;
         int del = 0;
         try {

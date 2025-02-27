@@ -1,5 +1,6 @@
 package com.qh.myconnect.dialect.sqlserver;
 
+import com.qh.myconnect.config.PreConfig;
 import org.apache.commons.lang3.StringUtils;
 
 import org.stringtemplate.v4.ST;
@@ -14,6 +15,8 @@ import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSetMetaData;
 import java.sql.SQLException;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -77,11 +80,11 @@ public class SqlServerDialect implements JdbcDialect {
                 columns.stream().map(x -> "\"" + x + "\"").collect(Collectors.toList());
         String sql =
                 "insert into "
-                        + jdbcSinkConfig.getDbSchema()
-                        + "."
-                        + jdbcSinkConfig.getTable()
-                        + String.format("(%s)", StringUtils.join(newColumns, ","))
-                        + String.format("values (%s)", StringUtils.join(values, ","));
+                + jdbcSinkConfig.getDbSchema()
+                + "."
+                + jdbcSinkConfig.getTable()
+                + String.format("(%s)", StringUtils.join(newColumns, ","))
+                + String.format("values (%s)", StringUtils.join(values, ","));
         return sql;
     }
 
@@ -93,7 +96,7 @@ public class SqlServerDialect implements JdbcDialect {
                 "insert into "
                 + jdbcSinkConfig.getDbSchema()
                 + "."
-                +"XJ$_" + jdbcSinkConfig.getTable()
+                + "XJ$_" + jdbcSinkConfig.getTable()
                 + String.format("(%s)", StringUtils.join(newColumns, ","))
                 + String.format("values (%s)", StringUtils.join(values, ","));
         return sql;
@@ -125,8 +128,8 @@ public class SqlServerDialect implements JdbcDialect {
             Connection connection, String table, String ucTable, List<ColumnMapper> ucColumns) {
         String delSql =
                 "delete from  <table>    "
-                        + " where not exists "
-                        + "       (select  <pks:{pk | <pk.sinkColumnName>}; separator=\" , \"> from <tmpTable> b where <pks:{pk | <table>.<pk.sinkColumnName>=b.<pk.sinkColumnName> }; separator=\" and \">  ) ";
+                + " where not exists "
+                + "       (select  <pks:{pk | <pk.sinkColumnName>}; separator=\" , \"> from <tmpTable> b where <pks:{pk | <table>.<pk.sinkColumnName>=b.<pk.sinkColumnName> }; separator=\" and \">  ) ";
         ST template = new ST(delSql);
         template.add("table", table);
         template.add("tmpTable", ucTable);
@@ -149,8 +152,8 @@ public class SqlServerDialect implements JdbcDialect {
                 columnMappers.stream().filter(ColumnMapper::isUc).collect(Collectors.toList());
         String sqlQueryString =
                 " select <columns:{sub | \"<sub.sinkColumnName>\" }; separator=\", \"> "
-                        + "  from <dbSchema>.<table> a "
-                        + " where  ";
+                + "  from <dbSchema>.<table> a "
+                + " where  ";
         ST sqlQueryTemplate = new ST(sqlQueryString);
         sqlQueryTemplate.add("dbSchema", jdbcSinkConfig.getDbSchema());
         sqlQueryTemplate.add("table", jdbcSinkConfig.getTable());
@@ -168,7 +171,8 @@ public class SqlServerDialect implements JdbcDialect {
         String wheres = StringUtils.join(where, "  or ");
         if (rowSize == 0) {
             sqlQuery = sqlQuery + " 1=2";
-        } else {
+        }
+        else {
             sqlQuery = sqlQuery + wheres;
         }
         return sqlQuery;
@@ -217,12 +221,12 @@ public class SqlServerDialect implements JdbcDialect {
         String upsertSQL =
                 String.format(
                         "MERGE INTO %s.%s AS [TARGET]"
-                                + " USING (%s) AS [SOURCE]"
-                                + " ON (%s)"
-                                + " WHEN MATCHED THEN"
-                                + " UPDATE SET %s"
-                                + " WHEN NOT MATCHED THEN"
-                                + " INSERT (%s) VALUES (%s);",
+                        + " USING (%s) AS [SOURCE]"
+                        + " ON (%s)"
+                        + " WHEN MATCHED THEN"
+                        + " UPDATE SET %s"
+                        + " WHEN NOT MATCHED THEN"
+                        + " INSERT (%s) VALUES (%s);",
                         database,
                         tableName,
                         usingClause,

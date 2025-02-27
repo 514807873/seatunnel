@@ -206,8 +206,7 @@ public class MySinkWriterUpdate extends AbstractSinkWriter<SeaTunnelRow, Void> {
                 {
                     if (preConfig.isOpenDelete()) {
                         long del = 0;
-                        if (this.jdbcSinkConfig.getDbSchema() != null
-                            && !this.jdbcSinkConfig.getDbSchema().equals("")) {
+                        if (StringUtils.isNoneBlank(this.jdbcSinkConfig.getDbSchema())) {
                             del =
                                     this.jdbcDialect.deleteData(
                                             conn,
@@ -215,11 +214,7 @@ public class MySinkWriterUpdate extends AbstractSinkWriter<SeaTunnelRow, Void> {
                                             this.jdbcSinkConfig.getDbSchema() + "." + tmpTable,
                                             ucColumns);
                         }
-                        else if (null != this.jdbcSinkConfig.getPreConfig().getClusterName()
-                                 && !this.jdbcSinkConfig
-                                .getPreConfig()
-                                .getClusterName()
-                                .equalsIgnoreCase("")) {
+                        else if (StringUtils.isNoneBlank(this.jdbcSinkConfig.getPreConfig().getClusterName())) {
                             del =
                                     this.jdbcDialect.deleteDataOnCluster(
                                             conn,
@@ -233,6 +228,36 @@ public class MySinkWriterUpdate extends AbstractSinkWriter<SeaTunnelRow, Void> {
                         }
                         conn.commit();
                         midCount.setDeleteCount(del + midCount.getDeleteCount());
+                    }
+                    else {
+                        if (preConfig.isAutoTimestamp() && preConfig.isRecordOperate()) {
+                            long del = 0;
+                            if (StringUtils.isNoneBlank(this.jdbcSinkConfig.getDbSchema())) {
+                                del =
+                                        this.jdbcDialect.deleteDataLogic(
+                                                conn,
+                                                this.jdbcSinkConfig.getDbSchema() + "." + table,
+                                                this.jdbcSinkConfig.getDbSchema() + "." + tmpTable,
+                                                ucColumns,
+                                                this.preConfig);
+                            }
+                            else if (StringUtils.isNoneBlank(this.jdbcSinkConfig.getPreConfig().getClusterName())) {
+                                del =
+                                        this.jdbcDialect.deleteDataOnClusterLogic(
+                                                conn,
+                                                table,
+                                                tmpTable,
+                                                ucColumns,
+                                                this.jdbcSinkConfig.getPreConfig().getClusterName(),
+                                                this.preConfig
+                                        );
+                            }
+                            else {
+                                del = this.jdbcDialect.deleteDataLogic(conn, table, tmpTable, ucColumns, this.preConfig);
+                            }
+                            conn.commit();
+                            midCount.setDeleteCount(del + midCount.getDeleteCount());
+                        }
                     }
                     conn.commit();
                 }

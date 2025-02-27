@@ -54,6 +54,13 @@ public class PreConfig implements Serializable {
     @OptionMark(description = "自动时间戳字段名")
     private String autoTimestampColumnName;
 
+
+    @OptionMark(description = "记录操作类型")
+    private boolean recordOperate = false;
+
+    @OptionMark(description = "操作类型字段名")
+    private String recordOperateColumnName;
+
     public PreConfig() {
     }
 

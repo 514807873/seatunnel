@@ -1,5 +1,6 @@
 package com.qh.myconnect.dialect.ClickHouse;
 
+import com.qh.myconnect.config.PreConfig;
 import org.apache.seatunnel.api.table.type.SeaTunnelRow;
 
 import org.apache.commons.lang3.StringUtils;
@@ -125,20 +126,32 @@ public class ClickHouseDialect implements JdbcDialect {
     }
 
     public String updateTableSql(JdbcSinkConfig jdbcSinkConfig, String columnName, List<String> ucColumns) {
+        String operateColumnName = jdbcSinkConfig.getPreConfig().getRecordOperateColumnName();
+        String timestampColumnName = jdbcSinkConfig.getPreConfig().getAutoTimestampColumnName();
+        LocalDateTime now = LocalDateTime.now();
+        DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
+        String timestampValue = now.format(formatter);
+        String tmpSql = "";
+        if (!jdbcSinkConfig.getPreConfig().isOpenDelete()
+            && jdbcSinkConfig.getPreConfig().isRecordOperate()
+            && jdbcSinkConfig.getPreConfig().isAutoTimestamp()
+        ) {
+            tmpSql += String.format(",%s='%s',%s='%s'", operateColumnName, "U", timestampColumnName, timestampValue);
+        }
         if (jdbcSinkConfig.getDbSchema() != null && !jdbcSinkConfig.getDbSchema().isEmpty()) {
             return "alter table " +
                    jdbcSinkConfig.getDbSchema() + "." +
                    quoteIdentifier(jdbcSinkConfig.getTable()) +
                    " update " +
                    quoteIdentifier(columnName) +
-                   " = ? where " +
+                   " = ? " + tmpSql + " where " +
                    StringUtils.join(ucColumns.stream().map(x -> quoteIdentifier(x) + " =? ").collect(Collectors.toList()), " and ");
         }
         return "alter table " +
                quoteIdentifier(jdbcSinkConfig.getTable()) +
                " update " +
                quoteIdentifier(columnName) +
-               " = ? where " +
+               " = ? " + tmpSql + " where " +
                StringUtils.join(ucColumns.stream().map(x -> quoteIdentifier(x) + " =? ").collect(Collectors.toList()), " and ");
     }
 
@@ -178,13 +191,62 @@ public class ClickHouseDialect implements JdbcDialect {
         return del;
     }
 
+    public int deleteDataLogic(
+            Connection connection, String table, String ucTable, List<ColumnMapper> ucColumns,PreConfig preConfig) {
+        String operateColumnName = preConfig.getRecordOperateColumnName();
+        String timestampColumnName = preConfig.getAutoTimestampColumnName();
+        LocalDateTime now = LocalDateTime.now();
+        DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
+        String timestampValue = now.format(formatter);
+        String querySql =
+                "select count(1) sl from  `<table>`   WHERE (<pks:{pk | `<pk.sinkColumnName>`}; separator=\", \">) NOT IN   (SELECT  <pks:{pk | `<pk.sinkColumnName>`}; separator=\", \"> FROM `<ucTable>`  ) "
+                + " and <operateColumnName> !='D'";
+        ST st = new ST(querySql);
+        st.add("table", table);
+        st.add("ucTable", ucTable);
+        st.add("pks", ucColumns);
+        st.add("operateColumnName", operateColumnName);
+        st.add("timestampColumnName", timestampColumnName);
+        st.add("timestampValue", timestampValue);
+        PreparedStatement query = null;
+        int del = 0;
+
+        String delSql =
+                "ALTER  TABLE <table> update  "
+                + " <operateColumnName>='D',<timestampColumnName>='<timestampValue>'"
+                + "WHERE (<pks:{pk | `<pk.sinkColumnName>`}; separator=\", \">) NOT IN   (SELECT  <pks:{pk | `<pk.sinkColumnName>`}; separator=\", \"> FROM `<ucTable>`  ) "
+                + " and <operateColumnName> !='D'";
+        ST template = new ST(delSql);
+        template.add("table", table);
+        template.add("ucTable", ucTable);
+        template.add("pks", ucColumns);
+        template.add("operateColumnName", operateColumnName);
+        template.add("timestampColumnName", timestampColumnName);
+        template.add("timestampValue", timestampValue);
+        PreparedStatement preparedStatement = null;
+        try {
+            query = connection.prepareStatement(st.render());
+            ResultSet resultSet = query.executeQuery();
+            if (resultSet.next()) {
+                del = resultSet.getInt("sl");
+            }
+            query.close();
+
+            preparedStatement = connection.prepareStatement(template.render());
+            preparedStatement.executeUpdate();
+            preparedStatement.close();
+        } catch (SQLException e) {
+            throw new RuntimeException(e);
+        }
+        return del;
+    }
+
     public int deleteDataOnCluster(
             Connection connection,
             String table,
             String ucTable,
             List<ColumnMapper> ucColumns,
             String clusterName) {
-
         String querySql =
                 "select count(1) sl from  `<table>`   WHERE (<pks:{pk | `<pk.sinkColumnName>`}; separator=\", \">) NOT IN   (SELECT  <pks:{pk | `<pk.sinkColumnName>`}; separator=\", \"> FROM `<ucTable>`  ) ";
         ST st = new ST(querySql);
@@ -212,6 +274,65 @@ public class ClickHouseDialect implements JdbcDialect {
             }
             query.close();
 
+            preparedStatement = connection.prepareStatement(template.render());
+            preparedStatement.executeUpdate();
+            preparedStatement.close();
+        } catch (SQLException e) {
+            throw new RuntimeException(e);
+        }
+        return del;
+    }
+
+    public int deleteDataOnClusterLogic(
+            Connection connection,
+            String table,
+            String ucTable,
+            List<ColumnMapper> ucColumns,
+            String clusterName,
+            PreConfig preConfig
+    ) {
+        String operateColumnName = preConfig.getRecordOperateColumnName();
+        String timestampColumnName = preConfig.getAutoTimestampColumnName();
+        LocalDateTime now = LocalDateTime.now();
+        DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
+        String timestampValue = now.format(formatter);
+        String querySql =
+                "select count(1) sl from  `<table>`   WHERE (<pks:{pk | `<pk.sinkColumnName>`}; separator=\", \">) NOT IN   "
+                + "(SELECT  <pks:{pk | `<pk.sinkColumnName>`}; separator=\", \"> FROM `<ucTable>` )"
+                + " and (<operateColumnName> != 'D' or <operateColumnName> is null) ";
+        ST st = new ST(querySql);
+        st.add("table", table);
+        st.add("ucTable", ucTable);
+        st.add("pks", ucColumns);
+        st.add("operateColumnName", operateColumnName);
+        PreparedStatement query = null;
+        int del = 0;
+
+        String delSql =
+                "ALTER  TABLE `<table>` on CLUSTER  <clusterName> update <operateColumnName>='<operateValue>',"
+                + "<timestampColumnName>='<timestampValue>'  WHERE (<pks:{pk | `<pk.sinkColumnName>`}; separator=\", "
+                + "\">) NOT IN   (SELECT  <pks:{pk | `<pk.sinkColumnName>`}; separator=\", \"> FROM "
+                + "`<ucTable>` ) "
+                + " and (<operateColumnName> != 'D' or <operateColumnName> is null) "
+                + "SETTINGS "
+                + "allow_nondeterministic_mutations = 1 ";
+        ST template = new ST(delSql);
+        template.add("table", table);
+        template.add("ucTable", ucTable);
+        template.add("pks", ucColumns);
+        template.add("clusterName", clusterName);
+        template.add("operateColumnName", operateColumnName);
+        template.add("operateValue", 'D');
+        template.add("timestampColumnName", timestampColumnName);
+        template.add("timestampValue", timestampValue);
+        PreparedStatement preparedStatement = null;
+        try {
+            query = connection.prepareStatement(st.render());
+            ResultSet resultSet = query.executeQuery();
+            if (resultSet.next()) {
+                del = resultSet.getInt("sl");
+            }
+            query.close();
             preparedStatement = connection.prepareStatement(template.render());
             preparedStatement.executeUpdate();
             preparedStatement.close();
@@ -608,5 +729,20 @@ public class ClickHouseDialect implements JdbcDialect {
         PreparedStatement ps = conn.prepareStatement(sql);
         ps.executeQuery();
         return ps.getMetaData();
+    }
+
+    public String modifyTimestamp(JdbcSinkConfig jdbcSinkConfig){
+        DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
+        LocalDateTime now = LocalDateTime.now();
+        String currentTimeString = now.format(formatter);
+        String autoTimestampColumnName = jdbcSinkConfig.getPreConfig().getAutoTimestampColumnName();
+        String sql = "alter table  %s update " + autoTimestampColumnName + "='%s' where 1=1";
+        if (StringUtils.isNoneBlank(jdbcSinkConfig.getDbSchema())) {
+            sql = String.format(sql, jdbcSinkConfig.getDbSchema() + "." + jdbcSinkConfig.getTable(), currentTimeString);
+        }
+        else {
+            sql = String.format(sql, jdbcSinkConfig.getTable(), currentTimeString);
+        }
+        return sql;
     }
 }

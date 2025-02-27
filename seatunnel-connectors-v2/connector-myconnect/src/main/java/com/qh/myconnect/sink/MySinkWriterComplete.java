@@ -32,6 +32,7 @@ import java.sql.ResultSetMetaData;
 import java.sql.SQLException;
 import java.sql.Statement;
 import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -186,6 +187,14 @@ public class MySinkWriterComplete extends AbstractSinkWriter<SeaTunnelRow, Void>
                     midCount
             );
             statisticalResults();
+            // 自动更新时间戳
+            if (jdbcSinkConfig.getPreConfig().isAutoTimestamp()) {
+                if (StringUtils.isNoneBlank(jdbcSinkConfig.getPreConfig().getAutoTimestampColumnName())) {
+                    String sql = jdbcDialect.modifyTimestamp(jdbcSinkConfig);
+                    conn.prepareStatement(sql).execute();
+                    conn.commit();
+                }
+            }
             conn.close();
         } catch (Exception e) {
             throw new RuntimeException(e);
