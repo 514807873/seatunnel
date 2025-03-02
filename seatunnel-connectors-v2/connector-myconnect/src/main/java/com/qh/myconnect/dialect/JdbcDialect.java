@@ -24,6 +24,7 @@ import com.qh.myconnect.config.MidCount;
 import com.qh.myconnect.config.PreConfig;
 import com.qh.myconnect.config.SeaTunnelJobsHistoryErrorRecord;
 import com.qh.myconnect.config.Util;
+import com.qh.myconnect.dialect.ClickHouse.ClickHouseDialect;
 import com.qh.myconnect.dialect.oracle.OracleDialect;
 import com.qh.myconnect.dialect.pgsql.PostgresDialect;
 
@@ -569,6 +570,46 @@ public interface JdbcDialect extends Serializable {
         return String.format(
                 "CREATE UNIQUE INDEX %s ON %s(%s)",
                 tmpTableName, tmpTableName, StringUtils.join(jdbcSinkConfig.getPrimaryKeys(), ','));
+    }
+
+    default void deleteReInsertData(
+            Connection connection,
+            String table,
+            String ucTable,
+            List<ColumnMapper> ucColumns,
+            JdbcSinkConfig jdbcSinkConfig) {
+        String operateColumnName = jdbcSinkConfig.getPreConfig().getRecordOperateColumnName();
+        String delSql =
+                "DELETE  FROM <table> WHERE (<pks:{pk | <pk.sinkColumnName>}; separator=\", \">) IN   (SELECT  <pks:{pk | <pk.sinkColumnName>}; separator=\", \"> FROM <ucTable>  ) "
+                + " and " + operateColumnName + "='D'";
+        if (this instanceof ClickHouseDialect) {
+            delSql =
+                    "ALTER  TABLE <table> DELETE  WHERE (<pks:{pk | <pk.sinkColumnName>}; separator=\", \">) IN   (SELECT  <pks:{pk | <pk.sinkColumnName>}; separator=\", \"> FROM <ucTable>  ) "
+                    + " and " + operateColumnName + "='D' ";
+            if (StringUtils.isNoneBlank(jdbcSinkConfig.getPreConfig().getClusterName())) {
+                delSql += " SETTINGS allow_nondeterministic_mutations = 1 ";
+            }
+        }
+        ST template = new ST(delSql);
+        if (StringUtils.isNoneBlank(jdbcSinkConfig.getDbSchema())) {
+            template.add("table", jdbcSinkConfig.getDbSchema() + "." + table);
+            template.add("ucTable", jdbcSinkConfig.getDbSchema() + "." + ucTable);
+        }
+        else {
+            template.add("table", table);
+            template.add("ucTable", ucTable);
+        }
+        template.add("pks", ucColumns);
+        PreparedStatement preparedStatement = null;
+        try {
+            preparedStatement = connection.prepareStatement(template.render());
+            preparedStatement.executeUpdate();
+            preparedStatement.close();
+            connection.commit();
+        } catch (SQLException e) {
+            throw new RuntimeException(e);
+        }
+
     }
 
     default int deleteData(

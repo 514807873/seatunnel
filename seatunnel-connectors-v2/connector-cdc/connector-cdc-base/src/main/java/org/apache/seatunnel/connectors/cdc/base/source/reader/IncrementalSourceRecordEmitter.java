@@ -147,7 +147,6 @@ public class IncrementalSourceRecordEmitter<T>
                 eventListener.onEvent(new MessageDelayedEvent(emitDelay, element.toString()));
             }
         }
-        //限流2秒发送一次offset记录请求
         new Thread(() -> {
             if (rateLimiter.tryAcquire()) {
                 System.out.println(element.sourceOffset());

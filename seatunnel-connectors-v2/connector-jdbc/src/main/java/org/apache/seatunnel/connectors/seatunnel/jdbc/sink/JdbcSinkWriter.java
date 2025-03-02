@@ -27,6 +27,7 @@ import org.apache.seatunnel.api.table.type.RowKind;
 import org.apache.seatunnel.api.table.type.SeaTunnelRow;
 import org.apache.seatunnel.common.exception.CommonErrorCodeDeprecated;
 import org.apache.seatunnel.connectors.seatunnel.jdbc.config.JdbcSinkConfig;
+import org.apache.seatunnel.connectors.seatunnel.jdbc.config.StreamRecord;
 import org.apache.seatunnel.connectors.seatunnel.jdbc.exception.JdbcConnectorErrorCode;
 import org.apache.seatunnel.connectors.seatunnel.jdbc.exception.JdbcConnectorException;
 import org.apache.seatunnel.connectors.seatunnel.jdbc.internal.JdbcOutputFormat;
@@ -41,6 +42,9 @@ import org.apache.seatunnel.connectors.seatunnel.jdbc.state.XidInfo;
 import com.zaxxer.hikari.HikariDataSource;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.seatunnel.shade.com.google.common.util.concurrent.RateLimiter;
+import org.jooq.DSLContext;
+import org.jooq.SQLDialect;
+import org.jooq.impl.DSL;
 
 import java.io.BufferedReader;
 import java.io.IOException;
@@ -56,6 +60,7 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
 import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Enumeration;
@@ -70,11 +75,11 @@ import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
 import static com.google.common.base.Preconditions.checkNotNull;
+import static org.jooq.impl.DSL.field;
+import static org.jooq.impl.DSL.table;
 
 @Slf4j
-public class JdbcSinkWriter
-        implements SinkWriter<SeaTunnelRow, XidInfo, JdbcSinkState>,
-        SupportMultiTableSinkWriter<ConnectionPoolManager> {
+public class JdbcSinkWriter implements SinkWriter<SeaTunnelRow, XidInfo, JdbcSinkState>, SupportMultiTableSinkWriter<ConnectionPoolManager> {
     private JdbcOutputFormat<SeaTunnelRow, JdbcBatchStatementExecutor<SeaTunnelRow>> outputFormat;
     private final JdbcDialect dialect;
     private final TableSchema tableSchema;
@@ -83,7 +88,6 @@ public class JdbcSinkWriter
     private final Integer primaryKeyIndex;
     private final JdbcSinkConfig jdbcSinkConfig;
 
-    private final RateLimiter rateLimiter = RateLimiter.create(0.5);
     private Long insertCount = 0L;
 
     private Long deleteCount = 0l;
@@ -94,50 +98,69 @@ public class JdbcSinkWriter
 
     private CodeConverter converter = new CodeConverter();
 
-    public JdbcSinkWriter(
-            JdbcDialect dialect,
-            JdbcSinkConfig jdbcSinkConfig,
-            TableSchema tableSchema,
-            Integer primaryKeyIndex,
-            String flinkJobId
-    ) {
+    private final Connection panguConnection = this.getPanguConnection();
+
+    private final DSLContext dslContext = DSL.using(panguConnection, SQLDialect.MYSQL);
+
+    private StreamRecord streamRecord = new StreamRecord(System.getenv("seaTunnelJobId"));
+
+    public JdbcSinkWriter(JdbcDialect dialect, JdbcSinkConfig jdbcSinkConfig, TableSchema tableSchema, Integer primaryKeyIndex, String flinkJobId) {
         this.jdbcSinkConfig = jdbcSinkConfig;
         this.dialect = dialect;
         this.tableSchema = tableSchema;
         this.primaryKeyIndex = primaryKeyIndex;
-        this.connectionProvider =
-                dialect.getJdbcConnectionProvider(jdbcSinkConfig.getJdbcConnectionConfig());
-        this.outputFormat =
-                new JdbcOutputFormatBuilder(
-                        dialect, connectionProvider, jdbcSinkConfig, tableSchema)
-                        .build();
+        this.connectionProvider = dialect.getJdbcConnectionProvider(jdbcSinkConfig.getJdbcConnectionConfig());
+        this.outputFormat = new JdbcOutputFormatBuilder(dialect, connectionProvider, jdbcSinkConfig, tableSchema).build();
         this.flinkJobId = flinkJobId;
         List<String> allDms = new ArrayList<>();
         Map<String, String> dmMap = new HashMap<>();
         Map<String, String> codeMapper = jdbcSinkConfig.getCodeMapper();
         if (codeMapper != null) {
             allDms = codeMapper.values().stream().filter(x -> x.startsWith("DM")).distinct().collect(Collectors.toList());
-        }
-        for (String allDm : allDms) {
-            String[] split = allDm.split("\\.");
-            String sql = String.format("select %s,%s from %s", split[2], split[3], split[1]);
-            try (Connection con = this.getPanguConnection();
-                 Statement stmt = con.createStatement()) {
-                ResultSet rs = stmt.executeQuery(sql);
-                while (rs.next()) {
-                    dmMap.put(allDm + "." + rs.getString(split[2]), rs.getString(split[3]));
+            for (String allDm : allDms) {
+                String[] split = allDm.split("\\.");
+                String sql = String.format("select %s,%s from %s", split[2], split[3], split[1]);
+                try (Statement stmt = panguConnection.createStatement()) {
+                    ResultSet rs = stmt.executeQuery(sql);
+                    while (rs.next()) {
+                        dmMap.put(allDm + "." + rs.getString(split[2]), rs.getString(split[3]));
+                    }
+                } catch (SQLException e) {
+                    throw new RuntimeException(e);
                 }
-            } catch (SQLException e) {
-                throw new RuntimeException(e);
             }
         }
+        LocalDateTime now = LocalDateTime.now();
+        DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd");
+        String rq = now.format(formatter);
+        dslContext.insertInto(table("pangu.seatunnel_stream_record"))
+                .columns(
+                        field("jobId"),
+                        field("rq"),
+                        field("writeCount"),
+                        field("insertCount"),
+                        field("updateCount"),
+                        field("deleteCount")
+                )
+                .values(
+                        streamRecord.getSeatunnelId(),
+                        rq,
+                        streamRecord.getWriteCount(),
+                        streamRecord.getInsertCount(),
+                        streamRecord.getUpdateCount(),
+                        streamRecord.getDeleteCount()
+                ).onDuplicateKeyUpdate()
+                .set(field("writeCount"), streamRecord.getWriteCount())
+                .set(field("insertCount"), streamRecord.getInsertCount())
+                .set(field("updateCount"), streamRecord.getUpdateCount())
+                .set(field("deleteCount"), streamRecord.getDeleteCount())
+                .execute();
         converter.setDmMap(dmMap);
         startLog();
     }
 
     @Override
-    public MultiTableResourceManager<ConnectionPoolManager> initMultiTableResourceManager(
-            int tableSize, int queueSize) {
+    public MultiTableResourceManager<ConnectionPoolManager> initMultiTableResourceManager(int tableSize, int queueSize) {
         HikariDataSource ds = new HikariDataSource();
         ds.setIdleTimeout(30 * 1000);
         ds.setMaximumPoolSize(queueSize);
@@ -153,19 +176,10 @@ public class JdbcSinkWriter
     }
 
     @Override
-    public void setMultiTableResourceManager(
-            MultiTableResourceManager<ConnectionPoolManager> multiTableResourceManager,
-            int queueIndex) {
+    public void setMultiTableResourceManager(MultiTableResourceManager<ConnectionPoolManager> multiTableResourceManager, int queueIndex) {
         connectionProvider.closeConnection();
-        this.connectionProvider =
-                new SimpleJdbcConnectionPoolProviderProxy(
-                        multiTableResourceManager.getSharedResource().get(),
-                        jdbcSinkConfig.getJdbcConnectionConfig(),
-                        queueIndex);
-        this.outputFormat =
-                new JdbcOutputFormatBuilder(
-                        dialect, connectionProvider, jdbcSinkConfig, tableSchema)
-                        .build();
+        this.connectionProvider = new SimpleJdbcConnectionPoolProviderProxy(multiTableResourceManager.getSharedResource().get(), jdbcSinkConfig.getJdbcConnectionConfig(), queueIndex);
+        this.outputFormat = new JdbcOutputFormatBuilder(dialect, connectionProvider, jdbcSinkConfig, tableSchema).build();
     }
 
     @Override
@@ -187,14 +201,18 @@ public class JdbcSinkWriter
 
     @Override
     public void write(SeaTunnelRow element) throws IOException {
+        streamRecord.plusWriteCount();
         if (element.getRowKind().equals(RowKind.INSERT)) {
             this.insertCount++;
+            streamRecord.plusInsertCount();
         }
         else if (element.getRowKind().equals(RowKind.DELETE)) {
             this.deleteCount++;
+            streamRecord.plusDeleteCount();
         }
         else {
             this.updateCount++;
+            streamRecord.plusUpdateCount();
         }
         List<String> columns = tableSchema.getColumns().stream().map(Column::getName).collect(Collectors.toList());
         Object[] newFields = new Object[columns.size()];
@@ -210,8 +228,7 @@ public class JdbcSinkWriter
                         newFields[i] = element.getField(Integer.parseInt(valueIndex));
                     }
                     else {
-                        newFields[i] = converter.convert(code,
-                                String.valueOf(element.getField(Integer.parseInt(valueIndex))));
+                        newFields[i] = converter.convert(code, String.valueOf(element.getField(Integer.parseInt(valueIndex))));
                     }
                 }
             }
@@ -239,7 +256,7 @@ public class JdbcSinkWriter
         }
         tryOpen();
         outputFormat.writeRecord(newRow);
-        //限流2秒发送一次offset记录请求
+
     }
 
     private void startLog() {
@@ -264,6 +281,31 @@ public class JdbcSinkWriter
             } catch (Exception e) {
                 throw new RuntimeException(e);
             }
+            LocalDateTime now = LocalDateTime.now();
+            DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd");
+            String rq = now.format(formatter);
+            dslContext.insertInto(table("pangu.seatunnel_stream_record"))
+                    .columns(
+                            field("jobId"),
+                            field("rq"),
+                            field("writeCount"),
+                            field("insertCount"),
+                            field("updateCount"),
+                            field("deleteCount")
+                    )
+                    .values(
+                            streamRecord.getSeatunnelId(),
+                            rq,
+                            streamRecord.getWriteCount(),
+                            streamRecord.getInsertCount(),
+                            streamRecord.getUpdateCount(),
+                            streamRecord.getDeleteCount()
+                    ).onDuplicateKeyUpdate()
+                    .set(field("writeCount"), streamRecord.getWriteCount())
+                    .set(field("insertCount"), streamRecord.getInsertCount())
+                    .set(field("updateCount"), streamRecord.getUpdateCount())
+                    .set(field("deleteCount"), streamRecord.getDeleteCount())
+                    .execute();
         }, 1, 2, TimeUnit.SECONDS);
     }
 
@@ -277,10 +319,7 @@ public class JdbcSinkWriter
                 connectionProvider.getConnection().commit();
             }
         } catch (SQLException e) {
-            throw new JdbcConnectorException(
-                    JdbcConnectorErrorCode.TRANSACTION_OPERATION_FAILED,
-                    "commit failed," + e.getMessage(),
-                    e);
+            throw new JdbcConnectorException(JdbcConnectorErrorCode.TRANSACTION_OPERATION_FAILED, "commit failed," + e.getMessage(), e);
         }
         return Optional.empty();
     }
@@ -298,12 +337,14 @@ public class JdbcSinkWriter
                 connectionProvider.getConnection().commit();
             }
         } catch (SQLException e) {
-            throw new JdbcConnectorException(
-                    CommonErrorCodeDeprecated.WRITER_OPERATION_FAILED,
-                    "unable to close JDBC sink write",
-                    e);
+            throw new JdbcConnectorException(CommonErrorCodeDeprecated.WRITER_OPERATION_FAILED, "unable to close JDBC sink write", e);
         }
         outputFormat.close();
+        try {
+            panguConnection.close();
+        } catch (SQLException e) {
+            throw new RuntimeException(e);
+        }
     }
 
     public <K, V> K getKeyByValue(Map<K, V> map, V value) {
@@ -358,9 +399,7 @@ public class JdbcSinkWriter
             info.setProperty("password", System.getenv("PANGU_MYSQL_ROOT_PASSWORD"));
             Connection conn = driver.connect(System.getenv("PANGU_MYSQL_URL"), info);
             if (conn == null) {
-                throw new JdbcConnectorException(
-                        JdbcConnectorErrorCode.NO_SUITABLE_DRIVER,
-                        "业务mysql无法连接，请检查");
+                throw new JdbcConnectorException(JdbcConnectorErrorCode.NO_SUITABLE_DRIVER, "业务mysql无法连接，请检查");
             }
             return conn;
         } catch (ClassNotFoundException | SQLException e) {
@@ -377,15 +416,11 @@ public class JdbcSinkWriter
                 return driver;
             }
         }
-        Class<?> clazz =
-                Class.forName(driverName, true, Thread.currentThread().getContextClassLoader());
+        Class<?> clazz = Class.forName(driverName, true, Thread.currentThread().getContextClassLoader());
         try {
             return (java.sql.Driver) clazz.getDeclaredConstructor().newInstance();
         } catch (Exception ex) {
-            throw new JdbcConnectorException(
-                    JdbcConnectorErrorCode.CREATE_DRIVER_FAILED,
-                    "Fail to create driver of class " + driverName,
-                    ex);
+            throw new JdbcConnectorException(JdbcConnectorErrorCode.CREATE_DRIVER_FAILED, "Fail to create driver of class " + driverName, ex);
         }
     }
 }

@@ -1,174 +1,114 @@
 {
   "env": {
     "ignoreEmptySource": true,
-    "job.mode": "BATCH",
-    "isRecordErrorData": 1,
+    "job.mode": "STREAMING",
+    "isRecordErrorData": 0,
     "execution.parallelism": 1,
-    "maxRecordNumber": 100,
-    "job.name": "int_caiwuxitong_activity_scope"
+    "maxRecordNumber": 0,
+    "job.name": "测试实时",
+    "checkpoint.interval": 5000
   },
   "source": [
     {
-      "db_type": "ORACLE",
-      "dbSchema": "TYDB",
-      "columns": [
-        "SCHOOL",
-        "GRADE",
-        "SPECIALTY",
-        "ROLE",
-        "ACTIVITY_ID",
-        "COLLEGE"
+      "db_type": "MYSQL",
+      "base-url": "jdbc:mysql://111.172.106.210:60173/DB_SOURCE?useUnicode=yes&characterEncoding=UTF-8&useSSL=false&serverTimezone=UTC&zeroDateTimeBehavior=convertToNull&tinyInt1isBit=false",
+      "password": "XIJIAgreat2020!$",
+      "startup.mode": "initial",
+      "query": "select * from DB_SOURCE.ss01",
+      "table-names": [
+        "DB_SOURCE.ss01"
       ],
-      "query": " select  \"SCHOOL\",\"GRADE\",\"SPECIALTY\",\"ROLE\",\"ACTIVITY_ID\",\"COLLEGE\" from  \"TYDB\".\"ACTIVITY_SCOPE\" ",
-      "input_type": "table",
-      "db_datasource_id": "1831155282188505090",
+      "db_datasource_id": "1837812015626383362",
       "result_columns": [
         {
-          "fullAlias": "SCHOOL",
-          "decimalDigit": 0,
-          "nullable": true,
-          "size": 4000,
-          "autoincrement": false,
-          "name": "SCHOOL",
-          "isPrimaryKey": false,
+          "fullAlias": "a",
+          "nullable": false,
+          "typeName": "VARCHAR",
+          "isPrimaryKey": true,
           "remark": "",
-          "type": "VARCHAR2",
-          "order": 0,
-          "primaryKey": false,
-          "sourceColumn": "1831155282188505090.TYDB.ACTIVITY_SCOPE.SCHOOL"
+          "type": "VARCHAR",
+          "database": "DB_SOURCE",
+          "decimalDigit": 0,
+          "size": 100,
+          "autoincrement": false,
+          "name": "a",
+          "table": "ss01",
+          "order": 1,
+          "primaryKey": true,
+          "sourceColumn": "1837812015626383362..ss01.a"
         },
         {
-          "fullAlias": "GRADE",
-          "decimalDigit": 0,
+          "fullAlias": "b",
           "nullable": true,
-          "size": 4000,
-          "autoincrement": false,
-          "name": "GRADE",
+          "typeName": "VARCHAR",
           "isPrimaryKey": false,
           "remark": "",
-          "type": "VARCHAR2",
-          "order": 0,
+          "type": "VARCHAR",
+          "database": "DB_SOURCE",
+          "decimalDigit": 0,
+          "size": 100,
+          "autoincrement": false,
+          "name": "b",
+          "table": "ss01",
+          "order": 2,
           "primaryKey": false,
-          "sourceColumn": "1831155282188505090.TYDB.ACTIVITY_SCOPE.GRADE"
+          "sourceColumn": "1837812015626383362..ss01.b"
         },
         {
-          "fullAlias": "SPECIALTY",
-          "decimalDigit": 0,
+          "fullAlias": "c",
           "nullable": true,
-          "size": 4000,
-          "autoincrement": false,
-          "name": "SPECIALTY",
+          "typeName": "VARCHAR",
           "isPrimaryKey": false,
           "remark": "",
-          "type": "VARCHAR2",
-          "order": 0,
-          "primaryKey": false,
-          "sourceColumn": "1831155282188505090.TYDB.ACTIVITY_SCOPE.SPECIALTY"
-        },
-        {
-          "fullAlias": "ROLE",
+          "type": "VARCHAR",
+          "database": "DB_SOURCE",
           "decimalDigit": 0,
-          "nullable": true,
-          "size": 4000,
+          "size": 100,
           "autoincrement": false,
-          "name": "ROLE",
-          "isPrimaryKey": false,
-          "remark": "",
-          "type": "VARCHAR2",
-          "order": 0,
+          "name": "c",
+          "table": "ss01",
+          "order": 3,
           "primaryKey": false,
-          "sourceColumn": "1831155282188505090.TYDB.ACTIVITY_SCOPE.ROLE"
-        },
-        {
-          "fullAlias": "ACTIVITY_ID",
-          "decimalDigit": 0,
-          "nullable": true,
-          "size": 4000,
-          "autoincrement": false,
-          "name": "ACTIVITY_ID",
-          "isPrimaryKey": false,
-          "remark": "",
-          "type": "VARCHAR2",
-          "order": 0,
-          "primaryKey": false,
-          "sourceColumn": "1831155282188505090.TYDB.ACTIVITY_SCOPE.ACTIVITY_ID"
-        },
-        {
-          "fullAlias": "COLLEGE",
-          "decimalDigit": 0,
-          "nullable": true,
-          "size": 4000,
-          "autoincrement": false,
-          "name": "COLLEGE",
-          "isPrimaryKey": false,
-          "remark": "",
-          "type": "VARCHAR2",
-          "order": 0,
-          "primaryKey": false,
-          "sourceColumn": "1831155282188505090.TYDB.ACTIVITY_SCOPE.COLLEGE"
+          "sourceColumn": "1837812015626383362..ss01.c"
         }
       ],
       "result_table_name": "t1",
-      "plugin_name": "JDBC",
-      "table_name": "ACTIVITY_SCOPE",
-      "url": "jdbc:oracle:thin:@192.168.10.46:1521/ORCL",
-      "password": "oracle",
-      "database": "ORCL",
-      "driver": "oracle.jdbc.driver.OracleDriver",
-      "user": "scott"
+      "plugin_name": "MySQL-CDC",
+      "user": "root",
+      "username": "root"
     }
   ],
   "transform": [],
   "sink": [
     {
-      "db_type": "CLICKHOUSE",
-      "openQuality": false,
-      "dbSchema": "",
+      "db_type": "ORACLE",
+      "dbSchema": "TYDB",
       "primary_keys": [
-        "ACTIVITY_ID"
+        "A"
       ],
       "code_mapper": {},
-      "db_datasource_id": "1831588642358628353",
+      "db_datasource_id": "1831155282188505090",
       "source_table_name": [
         "t1"
       ],
-      "plugin_name": "XJJDBC",
-      "url": "jdbc:clickhouse://192.168.9.148:9007,192.168.9.149:9007,192.168.9.147:9007/USR_ODS_DB?socket_timeout=60000",
-      "password": "Xjcz#qwe20200720#ods",
-      "database": "USR_ODS_DB",
-      "driver": "com.github.housepower.jdbc.ClickHouseDriver",
-      "field_mapper": {
-        "SCHOOL": "SCHOOL",
-        "ROLE": "ROLE",
-        "COLLEGE": "COLLEGE",
-        "GRADE": "GRADE",
-        "SPECIALTY": "SPECIALTY",
-        "ACTIVITY_ID": "ACTIVITY_ID"
+      "plugin_name": "JDBC",
+      "url": "jdbc:oracle:thin:@192.168.10.46:1521/ORCL",
+      "value_mapper": {
+        "0": "A",
+        "1": "B",
+        "2": "C"
       },
-      "user": "usr_ods",
-      "table": "t_caiwuxitong_activity_scope",
-      "pre_config": {
-        "cleanTableWhenCompleteNoDataIn": false,
-        "recordOperate": true,
-        "openDelete": false,
-        "autoTimestamp": true,
-        "insertMode": "increment",
-        "autoTimestampColumnName": "TSTAMP",
-        "ignoreColumns": [
-          "TSTAMP",
-          "GXSJ",
-          "gxsj",
-          "tstamp"
-        ],
-        "recordOperateColumnName": "OPERATEFLAG",
-        "zipperColumns": [
-        ],
-        "zipperTableName": "",
-        "clusterName": "cluster_1S_3R",
-        "ignoreTstamp": true,
-        "cleanTableWhenComplete": true,
-        "incrementMode": "update"
-      }
+      "database": "ORCL",
+      "password": "oracle",
+      "driver": "oracle.jdbc.driver.OracleDriver",
+      "field_mapper": {
+        "a": "A",
+        "b": "B",
+        "c": "C"
+      },
+      "generate_sink_sql": true,
+      "user": "scott",
+      "table": "TYDB.SS01"
     }
   ]
 }

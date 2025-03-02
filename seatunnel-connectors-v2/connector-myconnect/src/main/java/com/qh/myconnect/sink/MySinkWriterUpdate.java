@@ -231,6 +231,9 @@ public class MySinkWriterUpdate extends AbstractSinkWriter<SeaTunnelRow, Void> {
                     }
                     else {
                         if (preConfig.isAutoTimestamp() && preConfig.isRecordOperate()) {
+
+                            //处理原来删除又被插回来的数据
+                            jdbcDialect.deleteReInsertData(conn, table, tmpTable, ucColumns, jdbcSinkConfig);
                             long del = 0;
                             if (StringUtils.isNoneBlank(this.jdbcSinkConfig.getDbSchema())) {
                                 del =
