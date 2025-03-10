@@ -1,114 +1,102 @@
 {
   "env": {
     "ignoreEmptySource": true,
-    "job.mode": "STREAMING",
-    "isRecordErrorData": 0,
+    "job.mode": "BATCH",
+    "isRecordErrorData": 1,
     "execution.parallelism": 1,
-    "maxRecordNumber": 0,
-    "job.name": "测试实时",
-    "checkpoint.interval": 5000
+    "maxRecordNumber": 100,
+    "job.name": "一亿"
   },
   "source": [
     {
       "db_type": "MYSQL",
-      "base-url": "jdbc:mysql://111.172.106.210:60173/DB_SOURCE?useUnicode=yes&characterEncoding=UTF-8&useSSL=false&serverTimezone=UTC&zeroDateTimeBehavior=convertToNull&tinyInt1isBit=false",
-      "password": "XIJIAgreat2020!$",
-      "startup.mode": "initial",
-      "query": "select * from DB_SOURCE.ss01",
-      "table-names": [
-        "DB_SOURCE.ss01"
+      "dbSchema": "",
+      "columns": [
+        "id",
+        "name"
       ],
-      "db_datasource_id": "1837812015626383362",
+      "query": "select id,name from `test_1yi`",
+      "input_type": "table",
+      "db_datasource_id": "1833788404213149698",
       "result_columns": [
         {
-          "fullAlias": "a",
+          "fullAlias": "id",
           "nullable": false,
-          "typeName": "VARCHAR",
-          "isPrimaryKey": true,
+          "typeName": "INT",
           "remark": "",
-          "type": "VARCHAR",
+          "type": "INT",
           "database": "DB_SOURCE",
-          "decimalDigit": 0,
-          "size": 100,
-          "autoincrement": false,
-          "name": "a",
-          "table": "ss01",
+          "size": 11,
+          "autoincrement": true,
+          "name": "id",
+          "table": "test_1yi",
           "order": 1,
           "primaryKey": true,
-          "sourceColumn": "1837812015626383362..ss01.a"
+          "sourceColumn": "1833788404213149698..test_1yi.id"
         },
         {
-          "fullAlias": "b",
+          "fullAlias": "name",
           "nullable": true,
           "typeName": "VARCHAR",
-          "isPrimaryKey": false,
           "remark": "",
           "type": "VARCHAR",
           "database": "DB_SOURCE",
-          "decimalDigit": 0,
-          "size": 100,
+          "size": 255,
           "autoincrement": false,
-          "name": "b",
-          "table": "ss01",
+          "name": "name",
+          "table": "test_1yi",
           "order": 2,
           "primaryKey": false,
-          "sourceColumn": "1837812015626383362..ss01.b"
-        },
-        {
-          "fullAlias": "c",
-          "nullable": true,
-          "typeName": "VARCHAR",
-          "isPrimaryKey": false,
-          "remark": "",
-          "type": "VARCHAR",
-          "database": "DB_SOURCE",
-          "decimalDigit": 0,
-          "size": 100,
-          "autoincrement": false,
-          "name": "c",
-          "table": "ss01",
-          "order": 3,
-          "primaryKey": false,
-          "sourceColumn": "1837812015626383362..ss01.c"
+          "sourceColumn": "1833788404213149698..test_1yi.name"
         }
       ],
       "result_table_name": "t1",
-      "plugin_name": "MySQL-CDC",
-      "user": "root",
-      "username": "root"
+      "plugin_name": "JDBC",
+      "table_name": "test_1yi",
+      "url": "jdbc:mysql://111.172.106.210:60173/DB_SOURCE?useUnicode=yes&characterEncoding=UTF-8&useSSL=false&serverTimezone=UTC&zeroDateTimeBehavior=convertToNull&tinyInt1isBit=false",
+      "password": "XIJIAgreat2020!$",
+      "database": "DB_SOURCE",
+      "driver": "com.mysql.cj.jdbc.Driver",
+      "user": "root"
     }
   ],
   "transform": [],
   "sink": [
     {
-      "db_type": "ORACLE",
-      "dbSchema": "TYDB",
-      "primary_keys": [
-        "A"
-      ],
+      "openQuality": false,
+      "db_type": "CLICKHOUSE",
+      "dbSchema": "",
+      "primary_keys": [],
       "code_mapper": {},
-      "db_datasource_id": "1831155282188505090",
+      "query": "select * from `TEST1YI`",
+      "db_datasource_id": "1831588642358628353",
       "source_table_name": [
         "t1"
       ],
-      "plugin_name": "JDBC",
-      "url": "jdbc:oracle:thin:@192.168.10.46:1521/ORCL",
-      "value_mapper": {
-        "0": "A",
-        "1": "B",
-        "2": "C"
-      },
-      "database": "ORCL",
-      "password": "oracle",
-      "driver": "oracle.jdbc.driver.OracleDriver",
+      "plugin_name": "XJJDBC",
+      "url": "jdbc:clickhouse://192.168.9.147:9007/USR_ODS_DB?socket_timeout=60000",
+      "password": "Xjcz#qwe20200720#ods",
+      "database": "USR_ODS_DB",
+      "driver": "com.github.housepower.jdbc.ClickHouseDriver",
       "field_mapper": {
-        "a": "A",
-        "b": "B",
-        "c": "C"
+        "name": "name",
+        "id": "id"
       },
-      "generate_sink_sql": true,
-      "user": "scott",
-      "table": "TYDB.SS01"
+      "user": "usr_ods",
+      "table": "TEST1YI",
+      "pre_config": {
+        "cleanTableWhenCompleteNoDataIn": true,
+        "ignoreColumns": [],
+        "recordOperate": true,
+        "zipperColumns": [],
+        "zipperTableName": "",
+        "clusterName": "cluster_1S_3R",
+        "cleanTableWhenComplete": true,
+        "incrementMode": "update",
+        "openDelete": true,
+        "autoTimestamp": true,
+        "insertMode": "complete"
+      }
     }
   ]
 }

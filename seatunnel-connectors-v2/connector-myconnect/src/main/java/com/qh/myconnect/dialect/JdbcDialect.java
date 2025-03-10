@@ -787,7 +787,7 @@ public interface JdbcDialect extends Serializable {
                                  + " where "
                                  + " (%s) not in ( "
                                  + " select "
-                                 + " (%s) "
+                                 + " %s "
                                  + " from "
                                  + quoteIdentifier(jdbcSinkConfig.getDbSchema())
                                  + "."
@@ -805,7 +805,7 @@ public interface JdbcDialect extends Serializable {
                                  + " where "
                                  + " (%s) not in ( "
                                  + " select "
-                                 + " (%s) "
+                                 + " %s "
                                  + " from "
                                  + quoteIdentifier(jdbcSinkConfig.getTable())
                                  + tmpSql
@@ -907,7 +907,7 @@ public interface JdbcDialect extends Serializable {
                                  + "where "
                                  + " (%s) not in ( "
                                  + " select "
-                                 + "  (%s) "
+                                 + "  %s "
                                  + " from "
                                  + quoteIdentifier(jdbcSinkConfig.getDbSchema())
                                  + "."
@@ -932,7 +932,7 @@ public interface JdbcDialect extends Serializable {
                                  + "where "
                                  + " (%s) not in ( "
                                  + " select "
-                                 + "  (%s) "
+                                 + "  %s "
                                  + " from "
                                  + quoteIdentifier(jdbcSinkConfig.getTable())
                                  + tmpSql
@@ -1193,6 +1193,7 @@ public interface JdbcDialect extends Serializable {
             PreparedStatement psUpsert = conn.prepareStatement(sql);
             tmpInsertCount = midCount.getInsertCount();
             boolean hasError = false;
+            Exception exception = null;
             for (SeaTunnelRow seaTunnelRow : seaTunnelRows) {
                 if (seaTunnelRow != null) {
                     for (int i = 0; i < columnMappers.size(); i++) {
@@ -1207,13 +1208,15 @@ public interface JdbcDialect extends Serializable {
                         psUpsert.addBatch();
                     } catch (SQLException e) {
                         hasError = true;
+                        exception = e;
                         break;
                     }
                 }
             }
 
             if (hasError) {
-                throw new RuntimeException();
+//                throw new RuntimeException();
+                log.error("批量插入错误:", exception);
             }
             psUpsert.executeBatch();
             conn.commit();

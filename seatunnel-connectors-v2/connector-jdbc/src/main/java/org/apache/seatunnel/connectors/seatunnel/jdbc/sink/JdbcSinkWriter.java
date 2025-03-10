@@ -41,7 +41,6 @@ import org.apache.seatunnel.connectors.seatunnel.jdbc.state.XidInfo;
 
 import com.zaxxer.hikari.HikariDataSource;
 import lombok.extern.slf4j.Slf4j;
-import org.apache.seatunnel.shade.com.google.common.util.concurrent.RateLimiter;
 import org.jooq.DSLContext;
 import org.jooq.SQLDialect;
 import org.jooq.impl.DSL;
@@ -201,18 +200,35 @@ public class JdbcSinkWriter implements SinkWriter<SeaTunnelRow, XidInfo, JdbcSin
 
     @Override
     public void write(SeaTunnelRow element) throws IOException {
-        streamRecord.plusWriteCount();
+        LocalDateTime now = LocalDateTime.now();
+        DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd");
+        String rq = now.format(formatter);
         if (element.getRowKind().equals(RowKind.INSERT)) {
             this.insertCount++;
-            streamRecord.plusInsertCount();
+            dslContext.update(table("pangu.seatunnel_stream_record"))
+                    .set(field("writeCount", Integer.class), field("writeCount", Integer.class).add(1))
+                    .set(field("insertCount", Integer.class), field("insertCount", Integer.class).add(1))
+                    .where(field("jobId").eq(streamRecord.getSeatunnelId()))
+                    .and(field("rq").eq(rq))
+                    .execute();
         }
         else if (element.getRowKind().equals(RowKind.DELETE)) {
             this.deleteCount++;
-            streamRecord.plusDeleteCount();
+            dslContext.update(table("pangu.seatunnel_stream_record"))
+                    .set(field("writeCount", Integer.class), field("writeCount", Integer.class).add(1))
+                    .set(field("deleteCount", Integer.class), field("deleteCount", Integer.class).add(1))
+                    .where(field("jobId").eq(streamRecord.getSeatunnelId()))
+                    .and(field("rq").eq(rq))
+                    .execute();
         }
         else {
             this.updateCount++;
-            streamRecord.plusUpdateCount();
+            dslContext.update(table("pangu.seatunnel_stream_record"))
+                    .set(field("writeCount", Integer.class), field("writeCount", Integer.class).add(1))
+                    .set(field("updateCount", Integer.class), field("updateCount", Integer.class).add(1))
+                    .where(field("jobId").eq(streamRecord.getSeatunnelId()))
+                    .and(field("rq").eq(rq))
+                    .execute();
         }
         List<String> columns = tableSchema.getColumns().stream().map(Column::getName).collect(Collectors.toList());
         Object[] newFields = new Object[columns.size()];
@@ -262,9 +278,6 @@ public class JdbcSinkWriter implements SinkWriter<SeaTunnelRow, XidInfo, JdbcSin
     private void startLog() {
         ScheduledExecutorService service = new ScheduledThreadPoolExecutor(1);
         service.scheduleAtFixedRate(() -> {
-//            log.info("插入数据:" + String.valueOf(insertCount));
-//            log.info("删除数据:" + String.valueOf(deleteCount));
-//            log.info("更新数据:" + String.valueOf(updateCount));
             JSONObject param = new JSONObject();
             param.put("flinkJobId", this.flinkJobId);
             param.put("dataSourceId", jdbcSinkConfig.getDbDatasourceId());
@@ -281,31 +294,6 @@ public class JdbcSinkWriter implements SinkWriter<SeaTunnelRow, XidInfo, JdbcSin
             } catch (Exception e) {
                 throw new RuntimeException(e);
             }
-            LocalDateTime now = LocalDateTime.now();
-            DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd");
-            String rq = now.format(formatter);
-            dslContext.insertInto(table("pangu.seatunnel_stream_record"))
-                    .columns(
-                            field("jobId"),
-                            field("rq"),
-                            field("writeCount"),
-                            field("insertCount"),
-                            field("updateCount"),
-                            field("deleteCount")
-                    )
-                    .values(
-                            streamRecord.getSeatunnelId(),
-                            rq,
-                            streamRecord.getWriteCount(),
-                            streamRecord.getInsertCount(),
-                            streamRecord.getUpdateCount(),
-                            streamRecord.getDeleteCount()
-                    ).onDuplicateKeyUpdate()
-                    .set(field("writeCount"), streamRecord.getWriteCount())
-                    .set(field("insertCount"), streamRecord.getInsertCount())
-                    .set(field("updateCount"), streamRecord.getUpdateCount())
-                    .set(field("deleteCount"), streamRecord.getDeleteCount())
-                    .execute();
         }, 1, 2, TimeUnit.SECONDS);
     }
 

@@ -1,26 +1,18 @@
 package com.qh.myconnect.dialect.ClickHouse;
 
 import com.qh.myconnect.config.PreConfig;
-import org.apache.seatunnel.api.table.type.SeaTunnelRow;
-
 import org.apache.commons.lang3.StringUtils;
-
-import org.apache.velocity.Template;
 import org.apache.velocity.VelocityContext;
 import org.apache.velocity.app.Velocity;
 import org.apache.velocity.app.VelocityEngine;
-import org.apache.velocity.runtime.RuntimeConstants;
-import org.apache.velocity.runtime.resource.loader.StringResourceLoader;
-import org.apache.velocity.runtime.resource.util.StringResourceRepository;
 import org.stringtemplate.v4.ST;
-
 import com.qh.myconnect.config.JdbcSinkConfig;
 import com.qh.myconnect.converter.ColumnMapper;
 import com.qh.myconnect.converter.JdbcRowConverter;
 import com.qh.myconnect.dialect.JdbcDialect;
 import com.qh.myconnect.dialect.JdbcDialectTypeMapper;
-
 import java.io.StringWriter;
+import java.math.BigDecimal;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
@@ -29,7 +21,6 @@ import java.sql.SQLException;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -192,7 +183,7 @@ public class ClickHouseDialect implements JdbcDialect {
     }
 
     public int deleteDataLogic(
-            Connection connection, String table, String ucTable, List<ColumnMapper> ucColumns,PreConfig preConfig) {
+            Connection connection, String table, String ucTable, List<ColumnMapper> ucColumns, PreConfig preConfig) {
         String operateColumnName = preConfig.getRecordOperateColumnName();
         String timestampColumnName = preConfig.getAutoTimestampColumnName();
         LocalDateTime now = LocalDateTime.now();
@@ -281,6 +272,31 @@ public class ClickHouseDialect implements JdbcDialect {
             throw new RuntimeException(e);
         }
         return del;
+    }
+
+    public void setPreparedStatementValueByDbType(
+            int position, PreparedStatement preparedStatement, String dbType, String value)
+            throws SQLException {
+        if (value == null) {
+            preparedStatement.setObject(position, null);
+        }
+        else {
+            if (dbType.toUpperCase().contains("INT")) {
+                preparedStatement.setInt(position, Integer.parseInt(value));
+            }
+            else if (dbType.toUpperCase().contains("FLOAT")) {
+                preparedStatement.setFloat(position, Float.parseFloat(value));
+            }
+            else if (dbType.toUpperCase().contains("DECIMAL")) {
+                preparedStatement.setBigDecimal(position, new BigDecimal(value));
+            }
+            else if (dbType.toUpperCase().contains("DOUBLE")) {
+                preparedStatement.setDouble(position, Double.parseDouble(value));
+            }
+            else {
+                preparedStatement.setString(position, value);
+            }
+        }
     }
 
     public int deleteDataOnClusterLogic(
@@ -390,7 +406,7 @@ public class ClickHouseDialect implements JdbcDialect {
                 + " 'D' " + OPERATEFLAG + ","
                 + "'" + currentTimeString + "' " + OPERATETIME + ", "
                 + "'" + currentTimeString + "' " + OPERATETIME_END + " "
-                + " from (select * from  <table> where "+ OPERATETIME_END + " IS NULL and " + OPERATEFLAG + " in ('I','U') " +" ) a "
+                + " from (select * from  <table> where " + OPERATETIME_END + " IS NULL and " + OPERATEFLAG + " in ('I','U') " + " ) a "
                 + "   WHERE (<pks:{pk | `<pk.sinkColumnName>`}; "
                 + "separator=\", "
                 + "\">) NOT IN   (SELECT  <pks:{pk | `<pk.sinkColumnName>`}; separator=\", \"> FROM "
@@ -439,6 +455,7 @@ public class ClickHouseDialect implements JdbcDialect {
         }
         return del;
     }
+
     public int deleteDataZipperCluster(
             JdbcSinkConfig jdbcSinkConfig,
             Connection connection,
@@ -488,7 +505,7 @@ public class ClickHouseDialect implements JdbcDialect {
                 + " 'D' " + OPERATEFLAG + ","
                 + "'" + currentTimeString + "' " + OPERATETIME + ", "
                 + "'" + currentTimeString + "' " + OPERATETIME_END + " "
-                + " from (select * from  <table> where "+ OPERATETIME_END + " IS NULL and " + OPERATEFLAG + " in ('I','U') " +" ) a "
+                + " from (select * from  <table> where " + OPERATETIME_END + " IS NULL and " + OPERATEFLAG + " in ('I','U') " + " ) a "
                 + "   WHERE (<pks:{pk | `<pk.sinkColumnName>`}; "
                 + "separator=\", "
                 + "\">) NOT IN   (SELECT  <pks:{pk | `<pk.sinkColumnName>`}; separator=\", \"> FROM "
@@ -731,7 +748,7 @@ public class ClickHouseDialect implements JdbcDialect {
         return ps.getMetaData();
     }
 
-    public String modifyTimestamp(JdbcSinkConfig jdbcSinkConfig){
+    public String modifyTimestamp(JdbcSinkConfig jdbcSinkConfig) {
         DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
         LocalDateTime now = LocalDateTime.now();
         String currentTimeString = now.format(formatter);
