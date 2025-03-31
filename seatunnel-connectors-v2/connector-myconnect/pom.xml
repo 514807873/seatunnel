@@ -50,6 +50,14 @@
         </dependency>
 
         <dependency>
+            <groupId>com.xjgreat</groupId>
+            <artifactId>quality-check</artifactId>
+            <version>1.0.0</version>
+            <scope>system</scope>
+            <systemPath>D:\JavaProject\quality-checker\quality-checker-common\target\quality-checker-common-1.0-SNAPSHOT.jar</systemPath>
+        </dependency>
+
+        <dependency>
             <groupId>org.mongodb</groupId>
             <artifactId>mongodb-driver-sync</artifactId>
             <version>${mongo.driver.version}</version>

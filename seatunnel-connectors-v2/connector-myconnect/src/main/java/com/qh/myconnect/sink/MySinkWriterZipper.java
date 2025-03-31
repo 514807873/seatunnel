@@ -1,9 +1,12 @@
 package com.qh.myconnect.sink;
 
 import com.qh.myconnect.config.MidCount;
+import com.qh.myconnect.config.QualityFieldRule;
 import com.qh.myconnect.config.SubTaskStatus;
 import com.qh.myconnect.converter.CodeConverter;
 import com.qh.myconnect.dialect.trino.TrinoDialect;
+import com.xjgreat.quality.checker.common.check.RuleChecker;
+import com.xjgreat.quality.checker.common.check.SimpleRuleChecker;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.seatunnel.api.common.JobContext;
 import org.apache.seatunnel.api.configuration.ReadonlyConfig;
@@ -65,7 +68,7 @@ public class MySinkWriterZipper extends AbstractSinkWriter<SeaTunnelRow, Void> {
     private PreConfig preConfig;
 
     private final Integer currentTaskId;
-
+    private final RuleChecker ruleChecker = SimpleRuleChecker.newInstance();
     private final Set sqlErrorType = new HashSet();
     private CodeConverter converter = new CodeConverter();
     private final Set<String> ignoreColumns = new HashSet<>();
@@ -127,8 +130,25 @@ public class MySinkWriterZipper extends AbstractSinkWriter<SeaTunnelRow, Void> {
     public void write(SeaTunnelRow element) throws IOException {
         midCount.setWriteCount(midCount.getWriteCount() + 1);
         if (this.jdbcSinkConfig.isOpenQuality()) {
-//            this.qualityCount++;
-//            return;
+            List<QualityFieldRule> rules = this.jdbcSinkConfig.getQualityFieldRule();
+            boolean bo = false;
+            for (QualityFieldRule rule : rules) {
+                Integer sourceRowPosition = columnMappers.stream()
+                        .filter(x -> x.getSinkColumnName().equalsIgnoreCase(rule.getColumnName()))
+                        .findAny()
+                        .get()
+                        .getSourceRowPosition();
+                Object field = element.getField(sourceRowPosition);
+                try {
+                    bo = SimpleRuleChecker.checkAssert(ruleChecker, rule.getTableinfoId(), rule.getFieldinfoId(), field);
+                } catch (Exception e) {
+                    throw new RuntimeException(e);
+                }
+                if (bo) {
+                    midCount.plusQualityCount();
+                    return;
+                }
+            }
         }
         this.cld.add(element);
         if (midCount.getWriteCount() % this.jdbcSinkConfig.getBatchSize() == 0 || this.jobContext.getJobMode().equals(JobMode.STREAMING)) {
@@ -191,7 +211,7 @@ public class MySinkWriterZipper extends AbstractSinkWriter<SeaTunnelRow, Void> {
                         Optional<String> dbSchema = Optional.ofNullable(this.jdbcSinkConfig.getDbSchema());
                         String zipperTableName = zipperTable;
                         String originTableName = originTable;
-                        if (dbSchema.isPresent()) {
+                        if (dbSchema.isPresent() && StringUtils.isNoneBlank(dbSchema.get())) {
                             zipperTableName = this.jdbcSinkConfig.getDbSchema() + "." + zipperTable;
                             originTableName = this.jdbcSinkConfig.getDbSchema() + "." + originTable;
                         }
@@ -229,7 +249,8 @@ public class MySinkWriterZipper extends AbstractSinkWriter<SeaTunnelRow, Void> {
                     ResultSet resultSet = conn.createStatement().executeQuery(insertSqlCount);
                     resultSet.next();
                     midCount.setInsertCount(resultSet.getLong(1));
-                    String insertSql = this.jdbcDialect.insertDataZipper(jdbcSinkConfig, originTable, columns, ucs);
+                    String insertSql = this.jdbcDialect.insertDataZipper(jdbcSinkConfig, originTable, columns, ucs,
+                            conn);
                     conn.createStatement().execute(insertSql);
                     conn.commit();
                 }
@@ -377,7 +398,7 @@ public class MySinkWriterZipper extends AbstractSinkWriter<SeaTunnelRow, Void> {
                             for (int i = 1; i <= columnCount; i++) {
                                 Object value1 = rs1.getObject(i);
                                 Object value2 = rs2.getObject(i);
-                                if (!Objects.equals(value1, value2) ) {
+                                if (!Objects.equals(value1, value2)) {
 //                                    log.info("发现字段区别:" + md1.getColumnName(i));
 //                                    log.info("新值: " + value1);
 //                                    log.info("老值: " + value2);
@@ -385,10 +406,12 @@ public class MySinkWriterZipper extends AbstractSinkWriter<SeaTunnelRow, Void> {
 //                                        log.info("该字段已加入忽略对比:" + md1.getColumnName(i));
 //                                    }
                                     if (!ignoreColumns.contains(md1.getColumnName(i))) {
-                                        String updateSql = jdbcDialect.updateTableSqlZipper(jdbcSinkConfig, ucColumns);
+                                        String updateSql = jdbcDialect.updateTableSqlZipper(jdbcSinkConfig, ucColumns
+                                                , conn);
                                         String modifyTableSql = jdbcDialect.insertModifyTableSql(jdbcSinkConfig, originTable,
                                                 columns,
-                                                ucColumns);
+                                                ucColumns,
+                                                conn);
                                         PreparedStatement preparedStatement = conn.prepareStatement(updateSql);
                                         PreparedStatement preparedStatement1 = conn.prepareStatement(modifyTableSql);
                                         for (int j = 0; j < ucColumns.size(); j++) {
@@ -402,7 +425,7 @@ public class MySinkWriterZipper extends AbstractSinkWriter<SeaTunnelRow, Void> {
                                         change = true;
                                     }
                                 }
-                                if(change) break;
+                                if (change) break;
                             }
                             if (change) {
                                 midCount.setUpdateCount(midCount.getUpdateCount() + 1);

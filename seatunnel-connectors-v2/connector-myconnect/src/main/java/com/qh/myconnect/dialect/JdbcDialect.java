@@ -31,6 +31,7 @@ import com.qh.myconnect.dialect.pgsql.PostgresDialect;
 import com.qh.myconnect.dialect.sqlserver.SqlServerDialect;
 import org.apache.commons.lang3.StringUtils;
 
+import org.apache.commons.lang3.exception.ExceptionUtils;
 import org.apache.seatunnel.api.common.JobContext;
 import org.apache.seatunnel.api.table.type.SeaTunnelRow;
 import org.slf4j.Logger;
@@ -283,7 +284,7 @@ public interface JdbcDialect extends Serializable {
                StringUtils.join(ucColumns.stream().map(x -> quoteIdentifier(x) + " =? ").collect(Collectors.toList()), " and ");
     }
 
-    default String updateTableSqlZipper(JdbcSinkConfig jdbcSinkConfig, List<String> ucColumns) {
+    default String updateTableSqlZipper(JdbcSinkConfig jdbcSinkConfig, List<String> ucColumns, Connection conn) {
         String columnName = jdbcSinkConfig.getPreConfig().getZipperColumns().get(2);
         String OPERATEFLAG = jdbcSinkConfig.getPreConfig().getZipperColumns().get(0);
         switch (jdbcSinkConfig.getDbType()) {
@@ -299,30 +300,31 @@ public interface JdbcDialect extends Serializable {
             default:
                 break;
         }
-        LocalDateTime now = LocalDateTime.now();
-        DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
-        String currentTimeString = now.format(formatter);
+        String currentTimeString = this.currentTimeString(conn, jdbcSinkConfig.getDbSchema(), jdbcSinkConfig.getPreConfig().getZipperTableName(), columnName);
         if (jdbcSinkConfig.getDbSchema() != null && !jdbcSinkConfig.getDbSchema().isEmpty()) {
             return "update " +
                    jdbcSinkConfig.getDbSchema() + "." +
                    quoteIdentifier(jdbcSinkConfig.getPreConfig().getZipperTableName()) +
                    " set "
-                   + quoteIdentifier(columnName) + " = " + "'" + currentTimeString + "'" +
+                   + quoteIdentifier(columnName) + " = " + currentTimeString +
                    " where " + quoteIdentifier(columnName) + " is null and " +
                    StringUtils.join(ucColumns.stream().map(x -> quoteIdentifier(x) + " =? ").collect(Collectors.toList()), " and ");
         }
         return "update " +
                quoteIdentifier(jdbcSinkConfig.getPreConfig().getZipperTableName()) +
                " set "
-               + quoteIdentifier(columnName) + " = " + "'" + currentTimeString + "'" +
+               + quoteIdentifier(columnName) + " = " + currentTimeString +
                " where " + quoteIdentifier(columnName) + " is null and " +
                StringUtils.join(ucColumns.stream().map(x -> quoteIdentifier(x) + " =? ").collect(Collectors.toList()), " and ");
     }
 
     default String insertModifyTableSql(JdbcSinkConfig jdbcSinkConfig, String tmpTableName, List<String> columns,
-                                        List<String> ucColumns) {
+                                        List<String> ucColumns, Connection conn) {
         String OPERATEFLAG = jdbcSinkConfig.getPreConfig().getZipperColumns().get(0);
         String OPERATETIME = jdbcSinkConfig.getPreConfig().getZipperColumns().get(1);
+        String insetFlagValue = jdbcSinkConfig.getPreConfig().getZipperFlagValue().get(0);
+        String updateFlagValue = jdbcSinkConfig.getPreConfig().getZipperFlagValue().get(1);
+        String deleteFlagValue = jdbcSinkConfig.getPreConfig().getZipperFlagValue().get(2);
         switch (jdbcSinkConfig.getDbType()) {
             case "PGSQL":
             case "MYSQL":
@@ -333,9 +335,7 @@ public interface JdbcDialect extends Serializable {
             default:
                 break;
         }
-        LocalDateTime now = LocalDateTime.now();
-        DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
-        String currentTimeString = now.format(formatter);
+        String currentTimeString = this.currentTimeString(conn, jdbcSinkConfig.getDbSchema(), jdbcSinkConfig.getPreConfig().getZipperTableName(), OPERATETIME);
         List<String> collect1 = columns.stream().map(this::quoteIdentifier).collect(Collectors.toList());
         collect1.add(OPERATEFLAG);
         collect1.add(OPERATETIME);
@@ -351,8 +351,8 @@ public interface JdbcDialect extends Serializable {
                                  + "(%s)"
                                  + "select "
                                  + " %s, "
-                                 + "'U',"
-                                 + "'" + currentTimeString + "'"
+                                 + "'" + updateFlagValue + "',"
+                                 + currentTimeString
                                  + "from "
                                  + quoteIdentifier(jdbcSinkConfig.getDbSchema())
                                  + "."
@@ -371,8 +371,8 @@ public interface JdbcDialect extends Serializable {
                                  + "(%s)"
                                  + "select "
                                  + " %s, "
-                                 + "'U',"
-                                 + "'" + currentTimeString + "'"
+                                 + "'" + updateFlagValue + "',"
+                                 + currentTimeString
                                  + "from "
                                  + quoteIdentifier(tmpTableName)
                                  + " where "
@@ -579,13 +579,16 @@ public interface JdbcDialect extends Serializable {
             List<ColumnMapper> ucColumns,
             JdbcSinkConfig jdbcSinkConfig) {
         String operateColumnName = jdbcSinkConfig.getPreConfig().getRecordOperateColumnName();
+        String insetFlagValue = jdbcSinkConfig.getPreConfig().getZipperFlagValue().get(0);
+        String updateFlagValue = jdbcSinkConfig.getPreConfig().getZipperFlagValue().get(1);
+        String deleteFlagValue = jdbcSinkConfig.getPreConfig().getZipperFlagValue().get(2);
         String delSql =
                 "DELETE  FROM <table> WHERE (<pks:{pk | <pk.sinkColumnName>}; separator=\", \">) IN   (SELECT  <pks:{pk | <pk.sinkColumnName>}; separator=\", \"> FROM <ucTable>  ) "
-                + " and " + operateColumnName + "='D'";
+                + " and " + operateColumnName + "='" + deleteFlagValue + "'";
         if (this instanceof ClickHouseDialect) {
             delSql =
                     "ALTER  TABLE <table> DELETE  WHERE (<pks:{pk | <pk.sinkColumnName>}; separator=\", \">) IN   (SELECT  <pks:{pk | <pk.sinkColumnName>}; separator=\", \"> FROM <ucTable>  ) "
-                    + " and " + operateColumnName + "='D' ";
+                    + " and " + operateColumnName + "='" + deleteFlagValue + "' ";
             if (StringUtils.isNoneBlank(jdbcSinkConfig.getPreConfig().getClusterName())) {
                 delSql += " SETTINGS allow_nondeterministic_mutations = 1 ";
             }
@@ -645,12 +648,15 @@ public interface JdbcDialect extends Serializable {
         LocalDateTime now = LocalDateTime.now();
         DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
         String timestampValue = now.format(formatter);
+        String insetFlagValue = preConfig.getZipperFlagValue().get(0);
+        String updateFlagValue = preConfig.getZipperFlagValue().get(1);
+        String deleteFlagValue = preConfig.getZipperFlagValue().get(2);
         String delSql =
                 "update  <table>    "
-                + " set <operateColumnName>='D',<timestampColumnName>='<timestampValue>'"
+                + " set <operateColumnName>='" + deleteFlagValue + "',<timestampColumnName>='<timestampValue>'"
                 + " where not exists "
                 + "       (select  <pks:{pk | <pk.sinkColumnName>}; separator=\" , \"> from <tmpTable> where <pks:{pk | <table>.<pk.sinkColumnName>=<tmpTable>.<pk.sinkColumnName> }; separator=\" and \">  ) "
-                + " and <operateColumnName> !='D'";
+                + " and <operateColumnName> !='" + deleteFlagValue + "'";
         ST template = new ST(delSql);
         template.add("table", table);
         template.add("tmpTable", ucTable);
@@ -680,9 +686,14 @@ public interface JdbcDialect extends Serializable {
         String OPERATEFLAG = jdbcSinkConfig.getPreConfig().getZipperColumns().get(0);
         String OPERATETIME = jdbcSinkConfig.getPreConfig().getZipperColumns().get(1);
         String OPERATETIME_END = jdbcSinkConfig.getPreConfig().getZipperColumns().get(2);
-        LocalDateTime now = LocalDateTime.now();
-        DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
-        String currentTimeString = now.format(formatter);
+
+        String insetFlagValue = jdbcSinkConfig.getPreConfig().getZipperFlagValue().get(0);
+        String updateFlagValue = jdbcSinkConfig.getPreConfig().getZipperFlagValue().get(1);
+        String deleteFlagValue = jdbcSinkConfig.getPreConfig().getZipperFlagValue().get(2);
+
+
+        String currentTimeString = this.currentTimeString(connection, jdbcSinkConfig.getDbSchema(), jdbcSinkConfig.getPreConfig().getZipperTableName(), OPERATETIME);
+
         switch (jdbcSinkConfig.getDbType()) {
             case "PGSQL":
             case "MYSQL":
@@ -709,10 +720,10 @@ public interface JdbcDialect extends Serializable {
         String insertDelSql =
                 "insert into  <table> (<allColumns>) "
                 + "select <columns>,"
-                + " 'D' " + OPERATEFLAG + ","
-                + "'" + currentTimeString + "' " + OPERATETIME + ", "
-                + "'" + currentTimeString + "' " + OPERATETIME_END + " "
-                + " from (select * from  <table> where " + OPERATETIME_END + " IS NULL and " + OPERATEFLAG + " in ('I','U') " + " ) a "
+                + " '<deleteFlagValue>' " + OPERATEFLAG + ","
+                + currentTimeString  + OPERATETIME + ", "
+                + currentTimeString + " " + OPERATETIME_END + " "
+                + " from (select * from  <table> where " + OPERATETIME_END + " IS NULL and " + OPERATEFLAG + " in ('<insetFlagValue>','<updateFlagValue>') " + " ) a "
                 + "   WHERE (<pks:{pk | <pk.sinkColumnName>}; "
                 + "separator=\", "
                 + "\">) NOT IN   (SELECT  <pks:{pk | <pk.sinkColumnName>}; separator=\", \"> FROM "
@@ -723,6 +734,11 @@ public interface JdbcDialect extends Serializable {
         template1.add("columns", StringUtils.join(newColumns, ","));
         template1.add("allColumns", StringUtils.join(allColumns, ","));
         template1.add("pks", ucColumns);
+        template1.add("insetFlagValue", insetFlagValue);
+        template1.add("updateFlagValue", updateFlagValue);
+        template1.add("deleteFlagValue", deleteFlagValue);
+
+
         String render = template1.render();
         try {
             connection.createStatement().execute(render);
@@ -733,14 +749,16 @@ public interface JdbcDialect extends Serializable {
 
         String delSql =
                 "update  <table>    "
-                + " set " + OPERATETIME_END + "='" + currentTimeString + "'"
+                + " set " + OPERATETIME_END + "=" + currentTimeString
                 + " where not exists "
                 + "       (select  <pks:{pk | <pk.sinkColumnName>}; separator=\" , \"> from <tmpTable> where <pks:{pk | <table>.<pk.sinkColumnName>=<tmpTable>.<pk.sinkColumnName> }; separator=\" and \">  ) "
-                + " and " + OPERATETIME_END + " IS NULL and " + OPERATEFLAG + " in ('I','U') ";
+                + " and " + OPERATETIME_END + " IS NULL and " + OPERATEFLAG + " in ('<insetFlagValue>','<updateFlagValue>') ";
         ST template = new ST(delSql);
         template.add("table", zipperTable);
         template.add("tmpTable", originTable);
         template.add("pks", ucColumns);
+        template.add("insetFlagValue", insetFlagValue);
+        template.add("updateFlagValue", updateFlagValue);
         PreparedStatement preparedStatement = null;
         int del = 0;
         try {
@@ -768,12 +786,15 @@ public interface JdbcDialect extends Serializable {
     default String insertDataCount(JdbcSinkConfig jdbcSinkConfig, String tmpTableName, List<String> ucColumns) {
         String operateColumnName = jdbcSinkConfig.getPreConfig().getRecordOperateColumnName();
         String timestampColumnName = jdbcSinkConfig.getPreConfig().getAutoTimestampColumnName();
+        String insetFlagValue = jdbcSinkConfig.getPreConfig().getZipperFlagValue().get(0);
+        String updateFlagValue = jdbcSinkConfig.getPreConfig().getZipperFlagValue().get(1);
+        String deleteFlagValue = jdbcSinkConfig.getPreConfig().getZipperFlagValue().get(2);
         String tmpSql = " where 1=1 ";
         if (!jdbcSinkConfig.getPreConfig().isOpenDelete()
             && jdbcSinkConfig.getPreConfig().isRecordOperate()
             && jdbcSinkConfig.getPreConfig().isAutoTimestamp()
         ) {
-            tmpSql += " and (" + operateColumnName + " != 'D' or " + operateColumnName + " is null)";
+            tmpSql += " and (" + operateColumnName + " != '" + deleteFlagValue + "' or " + operateColumnName + " is null)";
         }
 
         List<String> collect = ucColumns.stream().map(this::quoteIdentifier).collect(Collectors.toList());
@@ -819,6 +840,11 @@ public interface JdbcDialect extends Serializable {
         List<String> collect = ucColumns.stream().map(this::quoteIdentifier).collect(Collectors.toList());
         String OPERATEFLAG = jdbcSinkConfig.getPreConfig().getZipperColumns().get(0);
         String OPERATETIME_END = jdbcSinkConfig.getPreConfig().getZipperColumns().get(2);
+        String insetFlagValue = jdbcSinkConfig.getPreConfig().getZipperFlagValue().get(0);
+        String updateFlagValue = jdbcSinkConfig.getPreConfig().getZipperFlagValue().get(1);
+        String deleteFlagValue = jdbcSinkConfig.getPreConfig().getZipperFlagValue().get(2);
+
+
         switch (jdbcSinkConfig.getDbType()) {
             case "PGSQL":
             case "MYSQL":
@@ -848,7 +874,7 @@ public interface JdbcDialect extends Serializable {
                                  + quoteIdentifier(jdbcSinkConfig.getDbSchema())
                                  + "."
                                  + quoteIdentifier(jdbcSinkConfig.getPreConfig().getZipperTableName())
-                                 + " where " + OPERATETIME_END + " is null  and " + OPERATEFLAG + " in ('I','U') "
+                                 + " where " + OPERATETIME_END + " is null  and " + OPERATEFLAG + " in ('" + insetFlagValue + "','" + updateFlagValue + "') "
                                  + ")", StringUtils.join(collect, ','),
                     StringUtils.join(collect, ',')
             );
@@ -864,7 +890,7 @@ public interface JdbcDialect extends Serializable {
                                  + " %s "
                                  + " from "
                                  + quoteIdentifier(jdbcSinkConfig.getPreConfig().getZipperTableName())
-                                 + " where " + OPERATETIME_END + " is null  and " + OPERATEFLAG + " in ('I','U') "
+                                 + " where " + OPERATETIME_END + " is null  and " + OPERATEFLAG + " in ('" + insetFlagValue + "','" + updateFlagValue + "') "
                                  + ")", StringUtils.join(collect, ','),
                     StringUtils.join(collect, ',')
             );
@@ -872,6 +898,9 @@ public interface JdbcDialect extends Serializable {
     }
 
     default String insertData(JdbcSinkConfig jdbcSinkConfig, String tmpTableName, List<String> columns, List<String> ucColumns) {
+        String insetFlagValue = jdbcSinkConfig.getPreConfig().getZipperFlagValue().get(0);
+        String updateFlagValue = jdbcSinkConfig.getPreConfig().getZipperFlagValue().get(1);
+        String deleteFlagValue = jdbcSinkConfig.getPreConfig().getZipperFlagValue().get(2);
         List<String> collect1 = columns.stream().map(this::quoteIdentifier).collect(Collectors.toList());
         List<String> collectCopy = new ArrayList<>(collect1);
         List<String> collect2 = ucColumns.stream().map(this::quoteIdentifier).collect(Collectors.toList());
@@ -885,10 +914,10 @@ public interface JdbcDialect extends Serializable {
             && jdbcSinkConfig.getPreConfig().isRecordOperate()
             && jdbcSinkConfig.getPreConfig().isAutoTimestamp()
         ) {
-            tmpSql += " and (" + operateColumnName + " != 'D' or " + operateColumnName + " is null)";
+            tmpSql += " and (" + operateColumnName + " != '" + deleteFlagValue + "' or " + operateColumnName + " is null)";
             collect1.add(operateColumnName);
             collect1.add(timestampColumnName);
-            collectCopy.add(" 'I' " + operateColumnName);
+            collectCopy.add(" '" + insetFlagValue + "' " + operateColumnName);
             collectCopy.add("'" + timestampValue + "'" + timestampColumnName);
         }
         if (StringUtils.isNoneBlank(jdbcSinkConfig.getDbSchema())) {
@@ -946,10 +975,13 @@ public interface JdbcDialect extends Serializable {
     }
 
     default String insertDataZipper(JdbcSinkConfig jdbcSinkConfig, String tmpTableName, List<String> columns,
-                                    List<String> ucColumns) {
+                                    List<String> ucColumns, Connection conn) {
         String OPERATEFLAG = jdbcSinkConfig.getPreConfig().getZipperColumns().get(0);
         String OPERATETIME = jdbcSinkConfig.getPreConfig().getZipperColumns().get(1);
         String OPERATETIME_END = jdbcSinkConfig.getPreConfig().getZipperColumns().get(2);
+        String insetFlagValue = jdbcSinkConfig.getPreConfig().getZipperFlagValue().get(0);
+        String updateFlagValue = jdbcSinkConfig.getPreConfig().getZipperFlagValue().get(1);
+        String deleteFlagValue = jdbcSinkConfig.getPreConfig().getZipperFlagValue().get(2);
         switch (jdbcSinkConfig.getDbType()) {
             case "PGSQL":
             case "MYSQL":
@@ -965,9 +997,7 @@ public interface JdbcDialect extends Serializable {
             default:
                 break;
         }
-        LocalDateTime now = LocalDateTime.now();
-        DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
-        String currentTimeString = now.format(formatter);
+        String currentTimeString = this.currentTimeString(conn, jdbcSinkConfig.getDbSchema(), jdbcSinkConfig.getPreConfig().getZipperTableName(), OPERATETIME);
         List<String> collect1 = columns.stream().map(this::quoteIdentifier).collect(Collectors.toList());
         collect1.add(OPERATEFLAG);
         collect1.add(OPERATETIME);
@@ -982,9 +1012,9 @@ public interface JdbcDialect extends Serializable {
                                  + "(%s)"
                                  + " select "
                                  + " %s, "
-                                 + "'I',"
-                                 + "'" + currentTimeString + "'"
-                                 + "from "
+                                 + "'" + insetFlagValue + "',"
+                                 + currentTimeString
+                                 + " from "
                                  + quoteIdentifier(jdbcSinkConfig.getDbSchema())
                                  + "."
                                  + quoteIdentifier(tmpTableName)
@@ -996,7 +1026,7 @@ public interface JdbcDialect extends Serializable {
                                  + quoteIdentifier(jdbcSinkConfig.getDbSchema())
                                  + "."
                                  + quoteIdentifier(jdbcSinkConfig.getPreConfig().getZipperTableName())
-                                 + " where " + OPERATETIME_END + " is null and " + OPERATEFLAG + " in ('I','U') "
+                                 + " where " + OPERATETIME_END + " is null and " + OPERATEFLAG + " in ('" + insetFlagValue + "','" + updateFlagValue + "') "
                                  + ")",
                     StringUtils.join(collect1, ','),
                     StringUtils.join(collect, ','),
@@ -1011,9 +1041,9 @@ public interface JdbcDialect extends Serializable {
                                  + "(%s)"
                                  + "select "
                                  + " %s, "
-                                 + "'I',"
-                                 + "'" + currentTimeString + "'"
-                                 + "from "
+                                 + "'" + insetFlagValue + "',"
+                                 + currentTimeString
+                                 + " from "
                                  + quoteIdentifier(tmpTableName)
                                  + "where "
                                  + " (%s) not in ( "
@@ -1021,7 +1051,7 @@ public interface JdbcDialect extends Serializable {
                                  + "  %s "
                                  + " from "
                                  + quoteIdentifier(jdbcSinkConfig.getPreConfig().getZipperTableName())
-                                 + " where " + OPERATETIME_END + " is null  and " + OPERATEFLAG + " in ('I','U') "
+                                 + " where " + OPERATETIME_END + " is null  and " + OPERATEFLAG + " in ('" + insetFlagValue + "','" + updateFlagValue + "') "
                                  + ")",
                     StringUtils.join(collect1, ','),
                     StringUtils.join(collect, ','),
@@ -1088,16 +1118,16 @@ public interface JdbcDialect extends Serializable {
     default String getDataSql(JdbcSinkConfig jdbcSinkConfig, List<ColumnMapper> columnMappers, String tableName) {
         String operateColumnName = jdbcSinkConfig.getPreConfig().getRecordOperateColumnName();
         String timestampColumnName = jdbcSinkConfig.getPreConfig().getAutoTimestampColumnName();
-        LocalDateTime now = LocalDateTime.now();
-        DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
-        String timestampValue = now.format(formatter);
+        String insetFlagValue = jdbcSinkConfig.getPreConfig().getZipperFlagValue().get(0);
+        String updateFlagValue = jdbcSinkConfig.getPreConfig().getZipperFlagValue().get(1);
+        String deleteFlagValue = jdbcSinkConfig.getPreConfig().getZipperFlagValue().get(2);
         String tmpSql = "";
         if (!jdbcSinkConfig.getPreConfig().isOpenDelete()
             && jdbcSinkConfig.getPreConfig().isRecordOperate()
             && jdbcSinkConfig.getPreConfig().isAutoTimestamp()
             && jdbcSinkConfig.getTable().equalsIgnoreCase(tableName)
         ) {
-            tmpSql += " where  (" + operateColumnName + " != 'D' or " + operateColumnName + " is null)";
+            tmpSql += " where  (" + operateColumnName + " != '" + deleteFlagValue + "' or " + operateColumnName + " is null)";
         }
 
         List<String> columns = columnMappers.stream().map(ColumnMapper::getSinkColumnName).collect(Collectors.toList());
@@ -1132,6 +1162,9 @@ public interface JdbcDialect extends Serializable {
     default String getDataSqlZipper(JdbcSinkConfig jdbcSinkConfig, List<ColumnMapper> columnMappers, String tableName) {
         String OPERATEFLAG = jdbcSinkConfig.getPreConfig().getZipperColumns().get(0);
         String OPERATETIME_END = jdbcSinkConfig.getPreConfig().getZipperColumns().get(2);
+        String insetFlagValue = jdbcSinkConfig.getPreConfig().getZipperFlagValue().get(0);
+        String updateFlagValue = jdbcSinkConfig.getPreConfig().getZipperFlagValue().get(1);
+        String deleteFlagValue = jdbcSinkConfig.getPreConfig().getZipperFlagValue().get(2);
         switch (jdbcSinkConfig.getDbType()) {
             case "PGSQL":
             case "MYSQL":
@@ -1154,7 +1187,8 @@ public interface JdbcDialect extends Serializable {
             newUcColumns.add(quoteIdentifier(column));
         }
         if (this instanceof OracleDialect || this instanceof PostgresDialect || this instanceof SqlServerDialect) {
-            return String.format("select %s from %s.%s where %s is null and %s in ('I','U') order by %s",
+            return String.format("select %s from %s.%s where %s is null and %s in ('" + insetFlagValue + "','" + updateFlagValue + "') "
+                                 + "order by %s",
                     StringUtils.join(newColumns, ","),
                     jdbcSinkConfig.getDbSchema(),
                     quoteIdentifier(tableName),
@@ -1164,7 +1198,8 @@ public interface JdbcDialect extends Serializable {
             );
         }
         else {
-            return String.format("select %s from %s  where %s is null and %s in ('I','U') order by %s",
+            return String.format("select %s from %s  where %s is null and %s in ('" + insetFlagValue + "','" + updateFlagValue + "') order by"
+                                 + " %s",
                     StringUtils.join(newColumns, ","),
                     quoteIdentifier(tableName),
                     OPERATETIME_END,
@@ -1186,14 +1221,14 @@ public interface JdbcDialect extends Serializable {
     ) {
         Long tmpInsertCount = null;
         String sql = null;
+        PreparedStatement psUpsert = null;
+        boolean isInsert = false;
         try {
             List<String> columns = columnMappers.stream().map(ColumnMapper::getSinkColumnName).collect(Collectors.toList());
             List<String> values = columnMappers.stream().map(x -> "?").collect(Collectors.toList());
             sql = this.insertTableSql(jdbcSinkConfig, columns, values);
-            PreparedStatement psUpsert = conn.prepareStatement(sql);
+            psUpsert = conn.prepareStatement(sql);
             tmpInsertCount = midCount.getInsertCount();
-            boolean hasError = false;
-            Exception exception = null;
             for (SeaTunnelRow seaTunnelRow : seaTunnelRows) {
                 if (seaTunnelRow != null) {
                     for (int i = 0; i < columnMappers.size(); i++) {
@@ -1204,33 +1239,27 @@ public interface JdbcDialect extends Serializable {
                         this.setPreparedStatementValueByDbType(i + 1, psUpsert, dbType, util.Object2String(field));
                     }
                     midCount.setInsertCount(midCount.getInsertCount() + 1);
-                    try {
-                        psUpsert.addBatch();
-                    } catch (SQLException e) {
-                        hasError = true;
-                        exception = e;
-                        break;
-                    }
+                    psUpsert.addBatch();
                 }
-            }
-
-            if (hasError) {
-//                throw new RuntimeException();
-                log.error("批量插入错误:", exception);
             }
             psUpsert.executeBatch();
             conn.commit();
             psUpsert.clearBatch();
             psUpsert.close();
-
+            isInsert = true;
         } catch (Exception e) {
-            log.error("错误sql:" + sql, e);
+            log.error("insertToDb方法,异常sql:" + sql + ExceptionUtils.getStackTrace(e));
             try {
+                assert psUpsert != null;
+                psUpsert.clearBatch();
+                psUpsert.close();
                 conn.rollback();
                 midCount.setInsertCount(tmpInsertCount);
             } catch (SQLException ex) {
-                throw new RuntimeException(ex);
+                log.error("insertToDb方法,异常:" + sql + ExceptionUtils.getStackTrace(ex));
             }
+        }
+        if (!isInsert) {
             insertToDbOneByOne(columnMappers,
                     jdbcSinkConfig,
                     conn,
@@ -1274,13 +1303,17 @@ public interface JdbcDialect extends Serializable {
                         psUpsert.close();
                         midCount.setInsertCount(midCount.getInsertCount() + 1);
                     } catch (SQLException ee) {
+                        conn.rollback();
+                        psUpsert.clearBatch();
+                        psUpsert.close();
                         midCount.setErrorCount(midCount.getErrorCount() + 1);
                         if (jobContext.getIsRecordErrorData() == 1 && midCount.getErrorCount() <= jobContext.getMaxRecordNumber() && !sqlErrorType.contains(ee.getMessage())) {
                             LinkedHashMap<String, Object> jsonObject = new LinkedHashMap<>();
                             for (int i = 0; i < columnMappers.size(); i++) {
                                 jsonObject.put(columnMappers.get(i).getSourceColumnName(), seaTunnelRow.getField(i));
                             }
-                            log.info(JSON.toJSONString(jsonObject, JSONWriter.Feature.WriteMapNullValue, JSONWriter.Feature.WriteNullListAsEmpty));
+                            log.info("insertToDbOneByOne异常数据" + JSON.toJSONString(jsonObject, JSONWriter.Feature.WriteMapNullValue,
+                                    JSONWriter.Feature.WriteNullListAsEmpty));
                             SeaTunnelJobsHistoryErrorRecord errorRecord = new SeaTunnelJobsHistoryErrorRecord();
                             errorRecord.setFlinkJobId(jobContext.getJobId());
                             errorRecord.setDataSourceId(jdbcSinkConfig.getDbDatasourceId());
@@ -1303,10 +1336,9 @@ public interface JdbcDialect extends Serializable {
         }
     }
 
-    default String modifyTimestamp(JdbcSinkConfig jdbcSinkConfig) {
-        DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
-        LocalDateTime now = LocalDateTime.now();
-        String currentTimeString = now.format(formatter);
+    default String modifyTimestamp(JdbcSinkConfig jdbcSinkConfig, Connection conn) {
+        String currentTimeString = this.currentTimeString(conn, jdbcSinkConfig.getDbSchema(),
+                jdbcSinkConfig.getTable(), jdbcSinkConfig.getPreConfig().getAutoTimestampColumnName());
         String autoTimestampColumnName = jdbcSinkConfig.getPreConfig().getAutoTimestampColumnName();
         String sql = "update %s set " + autoTimestampColumnName + "='%s' ";
         if (StringUtils.isNoneBlank(jdbcSinkConfig.getDbSchema())) {
@@ -1316,5 +1348,33 @@ public interface JdbcDialect extends Serializable {
             sql = String.format(sql, jdbcSinkConfig.getTable(), currentTimeString);
         }
         return sql;
+    }
+
+    default String currentTimeString(Connection conn, String schemaName, String tableName, String columnName) {
+        if (StringUtils.isNoneBlank(schemaName)) {
+            tableName = schemaName + "." + tableName;
+        }
+        LocalDateTime now = LocalDateTime.now();
+        DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
+        String currentTimeString = now.format(formatter);
+        //只管oracle的 其他的先不管
+        if (this instanceof OracleDialect) {
+            String sql = String.format("SELECT  %s from %s WHERE ROWNUM=1", columnName, tableName);
+            try {
+                PreparedStatement psUpsert = conn.prepareStatement(sql);
+                String columnTypeName = psUpsert.getMetaData().getColumnTypeName(1);
+                if (columnTypeName.contains("CHAR")) {
+                    return currentTimeString;
+                }
+                else {
+                    return String.format("to_date('%s','yyyy-mm-dd hh24:mi:ss')", currentTimeString);
+                }
+            } catch (SQLException e) {
+                throw new RuntimeException(e);
+            }
+        }
+        else {
+            return "'" + currentTimeString + "'";
+        }
     }
 }

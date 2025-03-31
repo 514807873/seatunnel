@@ -175,5 +175,10 @@ public interface JdbcOptions {
             .defaultValue(false)
             .withDescription("开启质量检测数据过滤");
 
+    Option<List<QualityFieldRule>> qualityFieldRule = Options.key("qualityFieldRule")
+            .listType(QualityFieldRule.class)
+            .noDefaultValue()
+            .withDescription("质量检测数据过滤规则");
+
 
 }

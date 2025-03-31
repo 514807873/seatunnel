@@ -2,9 +2,13 @@ package com.qh.myconnect.sink;
 
 import com.alibaba.fastjson2.JSONWriter;
 import com.qh.myconnect.config.MidCount;
+import com.qh.myconnect.config.QualityFieldRule;
 import com.qh.myconnect.config.SubTaskStatus;
 import com.qh.myconnect.converter.CodeConverter;
+import com.xjgreat.quality.checker.common.check.RuleChecker;
+import com.xjgreat.quality.checker.common.check.SimpleRuleChecker;
 import org.apache.commons.lang3.StringUtils;
+import org.apache.commons.lang3.exception.ExceptionUtils;
 import org.apache.seatunnel.api.common.JobContext;
 import org.apache.seatunnel.api.configuration.ReadonlyConfig;
 import org.apache.seatunnel.api.table.type.SeaTunnelRow;
@@ -66,7 +70,7 @@ public class MySinkWriterUpdate extends AbstractSinkWriter<SeaTunnelRow, Void> {
 
     private final Util util = new Util();
     private final PreConfig preConfig;
-
+    private final RuleChecker ruleChecker = SimpleRuleChecker.newInstance();
     private final Integer currentTaskId;
 
     private final Set sqlErrorType = new HashSet();
@@ -118,8 +122,25 @@ public class MySinkWriterUpdate extends AbstractSinkWriter<SeaTunnelRow, Void> {
     public void write(SeaTunnelRow element) throws IOException {
         midCount.setWriteCount(midCount.getWriteCount() + 1);
         if (this.jdbcSinkConfig.isOpenQuality()) {
-//            this.qualityCount++;
-//            return;
+            List<QualityFieldRule> rules = this.jdbcSinkConfig.getQualityFieldRule();
+            boolean bo = false;
+            for (QualityFieldRule rule : rules) {
+                Integer sourceRowPosition = columnMappers.stream()
+                        .filter(x -> x.getSinkColumnName().equalsIgnoreCase(rule.getColumnName()))
+                        .findAny()
+                        .get()
+                        .getSourceRowPosition();
+                Object field = element.getField(sourceRowPosition);
+                try {
+                    bo = SimpleRuleChecker.checkAssert(ruleChecker, rule.getTableinfoId(), rule.getFieldinfoId(), field);
+                } catch (Exception e) {
+                    throw new RuntimeException(e);
+                }
+                if (bo) {
+                    midCount.plusQualityCount();
+                    return;
+                }
+            }
         }
         this.cld.add(element);
         if (midCount.getWriteCount() % this.jdbcSinkConfig.getBatchSize() == 0 || this.jobContext.getJobMode().equals(JobMode.STREAMING)) {
@@ -173,7 +194,7 @@ public class MySinkWriterUpdate extends AbstractSinkWriter<SeaTunnelRow, Void> {
             psUpsert.close();
 
         } catch (Exception e) {
-            log.error("错误sql:" + sql, e);
+            log.error("错误sql:" + sql, ExceptionUtils.getStackTrace(e));
             try {
                 conn.rollback();
             } catch (SQLException ex) {
@@ -344,7 +365,7 @@ public class MySinkWriterUpdate extends AbstractSinkWriter<SeaTunnelRow, Void> {
                             errorRecord.setDbSchema(jdbcSinkConfig.getDbSchema());
                             errorRecord.setTableName(jdbcSinkConfig.getTable());
                             errorRecord.setErrorData(JSON.toJSONString(jsonObject, JSONWriter.Feature.WriteMapNullValue, JSONWriter.Feature.WriteNullListAsEmpty));
-                            errorRecord.setErrorMessage(ee.getMessage());
+                            errorRecord.setErrorMessage(ExceptionUtils.getStackTrace(ee));
                             sqlErrorType.add(ee.getMessage());
                             try {
                                 util.insertErrorData(errorRecord);

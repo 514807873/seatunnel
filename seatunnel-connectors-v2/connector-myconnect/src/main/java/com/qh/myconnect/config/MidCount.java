@@ -15,4 +15,8 @@ public class MidCount implements Serializable {
     private Long deleteCount = 0L;
     private Long errorCount = 0L;
     private Long qualityCount = 0L;
+
+    public void plusQualityCount() {
+        this.qualityCount++;
+    }
 }

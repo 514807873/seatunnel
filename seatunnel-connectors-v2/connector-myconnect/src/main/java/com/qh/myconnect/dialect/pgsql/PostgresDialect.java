@@ -185,7 +185,7 @@ public class PostgresDialect implements JdbcDialect {
                 "insert into "
                 + "\"" + jdbcSinkConfig.getDbSchema() + "\""
                 + "."
-                + "\"" +"XJ$_" + jdbcSinkConfig.getTable() + "\""
+                + "\"" + "XJ$_" + jdbcSinkConfig.getTable() + "\""
                 + String.format("(%s)", StringUtils.join(newColumns, ","))
                 + String.format("values (%s)", StringUtils.join(values, ","));
         return sql;
@@ -249,6 +249,9 @@ public class PostgresDialect implements JdbcDialect {
             String ucTable,
             List<ColumnMapper> ucColumns,
             PreConfig preConfig) {
+        String insetFlagValue = preConfig.getZipperFlagValue().get(0);
+        String updateFlagValue = preConfig.getZipperFlagValue().get(1);
+        String deleteFlagValue = preConfig.getZipperFlagValue().get(2);
         String operateColumnName = preConfig.getRecordOperateColumnName();
         String timestampColumnName = preConfig.getAutoTimestampColumnName();
         LocalDateTime now = LocalDateTime.now();
@@ -262,10 +265,10 @@ public class PostgresDialect implements JdbcDialect {
                 });
         String delSql =
                 "update  <table> a   "
-                + " set a.<operateColumnName> = 'D', a.<timestampColumnName> = '<timestampValue>' "
+                + " set a.<operateColumnName> = '" + deleteFlagValue + "', a.<timestampColumnName> = '<timestampValue>' "
                 + " where not exists "
                 + "       (select  <pks:{pk | <pk.sinkColumnName>}; separator=\" , \"> from <tmpTable> b where <pks:{pk | a.<pk.sinkColumnName>=b.<pk.sinkColumnName> }; separator=\" and \">  ) "
-                + " and <operateColumnName> !='D'";
+                + " and <operateColumnName> !='" + deleteFlagValue + "'";
         ST template = new ST(delSql);
         template.add("table", StringUtils.join(Arrays.stream(table.split("\\.")).map(x -> "\"" + x + "\"").collect(Collectors.toList()), "."));
         template.add("tmpTable", StringUtils.join(Arrays.stream(ucTable.split("\\.")).map(x -> "\"" + x + "\"").collect(Collectors.toList()), "."));

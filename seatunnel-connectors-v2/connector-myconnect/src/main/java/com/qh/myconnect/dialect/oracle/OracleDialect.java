@@ -334,6 +334,9 @@ public class OracleDialect implements JdbcDialect {
             String ucTable,
             List<ColumnMapper> ucColumns,
             PreConfig preConfig) {
+        String insetFlagValue = preConfig.getZipperFlagValue().get(0);
+        String updateFlagValue = preConfig.getZipperFlagValue().get(1);
+        String deleteFlagValue = preConfig.getZipperFlagValue().get(2);
         String operateColumnName = preConfig.getRecordOperateColumnName();
         String timestampColumnName = preConfig.getAutoTimestampColumnName();
         LocalDateTime now = LocalDateTime.now();
@@ -341,10 +344,10 @@ public class OracleDialect implements JdbcDialect {
         String timestampValue = now.format(formatter);
         String delSql =
                 "update  <table> a   "
-                + " set  <operateColumnName> = 'D' , <timestampColumnName> = '<timestampValue>' "
+                + " set  <operateColumnName> = '" + deleteFlagValue + "' , <timestampColumnName> = '<timestampValue>' "
                 + " where not exists "
                 + "       (select  <pks:{pk | <pk.sinkColumnName>}; separator=\" , \"> from <tmpTable> b where <pks:{pk | a.<pk.sinkColumnName>=b.<pk.sinkColumnName> }; separator=\" and \">  ) "
-                + " and <operateColumnName> !='D'";
+                + " and <operateColumnName> !='" + deleteFlagValue + "'";
         ST template = new ST(delSql);
         template.add("table", StringUtils.join(table.split("\\."), "."));
         template.add("tmpTable", ucTable);
@@ -406,6 +409,9 @@ public class OracleDialect implements JdbcDialect {
             List<ColumnMapper> columnMappers, int rowSize, JdbcSinkConfig jdbcSinkConfig) {
         List<ColumnMapper> ucColumns =
                 columnMappers.stream().filter(ColumnMapper::isUc).collect(Collectors.toList());
+        String insetFlagValue = jdbcSinkConfig.getPreConfig().getZipperFlagValue().get(0);
+        String updateFlagValue = jdbcSinkConfig.getPreConfig().getZipperFlagValue().get(1);
+        String deleteFlagValue = jdbcSinkConfig.getPreConfig().getZipperFlagValue().get(2);
         String sqlQueryString =
                 "select  "
                 + " <columns:{sub | \"<sub.sinkColumnName>\"  }; separator=\", \"> "
@@ -415,7 +421,7 @@ public class OracleDialect implements JdbcDialect {
                 + "          from <dbSchema>.<table>  "
                 + "         )  "
                 + " where hang = 1  "
-                + "   and  OPERATEFLAG in ('I', 'U')"
+                + "   and  OPERATEFLAG in ('" + insetFlagValue + "', '" + updateFlagValue + "')"
                 + "   and <filter> ";
         ST sqlQueryTemplate = new ST(sqlQueryString);
         sqlQueryTemplate.add("dbSchema", jdbcSinkConfig.getDbSchema());
@@ -474,6 +480,9 @@ public class OracleDialect implements JdbcDialect {
         List<ColumnMapper> ucColumns =
                 columnMappers.stream().filter(ColumnMapper::isUc).collect(Collectors.toList());
         int insert = 0;
+        String insetFlagValue = jdbcSinkConfig.getPreConfig().getZipperFlagValue().get(0);
+        String updateFlagValue = jdbcSinkConfig.getPreConfig().getZipperFlagValue().get(1);
+        String deleteFlagValue = jdbcSinkConfig.getPreConfig().getZipperFlagValue().get(2);
         String insertSql1 =
                 "select count(1) sl "
                 + "  from (select * "
@@ -482,7 +491,7 @@ public class OracleDialect implements JdbcDialect {
                 + "                       row_number() over(partition by <pks:{pk | \"<pk.sinkColumnName>\" }; separator=\", \"> order by OPERATETIME desc) hang "
                 + "                  from <dbSchema>.<table>) "
                 + "         where hang = 1 "
-                + "           and OPERATEFLAG in ('I', 'U')) "
+                + "           and OPERATEFLAG in ('" + insetFlagValue + "', '" + updateFlagValue + "')) "
                 + " where <pks:{pk | \"<pk.sinkColumnName>\" }; separator=\", \"> not in (select <pks:{pk | \"<pk.sinkColumnName>\" }; separator=\", \"> from <dbSchema>.<ucTable>)";
         ST template1 = new ST(insertSql1);
         template1.add("dbSchema", jdbcSinkConfig.getDbSchema());
@@ -508,13 +517,14 @@ public class OracleDialect implements JdbcDialect {
                 "insert into <dbSchema>.<table>"
                 + "  (<columns:{sub | \"<sub.sinkColumnName>\"  }; separator=\", \">, operateFlag, operateTime)"
                 + " select  "
-                + "  <columns:{sub | \"<sub.sinkColumnName>\" }; separator=\", \">, 'D' operateFlag, '<operateTime>' operateTime"
+                + "  <columns:{sub | \"<sub.sinkColumnName>\" }; separator=\", \">, '"+deleteFlagValue+"' operateFlag, "
+                + "'<operateTime>' operateTime"
                 + "  from (select *  "
                 + "          from (select <columns:{sub | \"<sub.sinkColumnName>\" }; separator=\", \">,operateFlag,  "
                 + "                       row_number() over(partition by <pks:{pk | \"<pk.sinkColumnName>\" }; separator=\", \"> order by OPERATETIME desc) hang  "
                 + "                  from <dbSchema>.<table>)  "
                 + "         where hang = 1  "
-                + "           and OPERATEFLAG in ('I', 'U'))  "
+                + "           and OPERATEFLAG in ('" + insetFlagValue + "', '" + updateFlagValue + "'))  "
                 + " where <pks:{pk | \"<pk.sinkColumnName>\" }; separator=\", \"> not in (select <pks:{pk | \"<pk.sinkColumnName>\" }; separator=\", \"> from  <dbSchema>.<ucTable> )";
         ST template = new ST(insertSql);
         template.add("dbSchema", jdbcSinkConfig.getDbSchema());

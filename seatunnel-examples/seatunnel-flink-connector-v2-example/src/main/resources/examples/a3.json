@@ -4,99 +4,149 @@
     "isRecordErrorData": 0,
     "execution.parallelism": 1,
     "maxRecordNumber": 0,
-    "job.name": "aa",
-    "checkpoint.interval": 60000
+    "job.name": "希嘉云端侵入式实时同步测试任务",
+    "checkpoint.interval": 5000
   },
   "source": [
     {
-      "plugin_name": "MySQL-CDC",
-      "base-url": "jdbc:mysql://192.168.9.63:30316/renshi?useUnicode=yes&characterEncoding=UTF-8&useSSL=false&serverTimezone=UTC",
-      "username": "root",
-      "password": "PANGUmysql2023:)",
-      "db_datasource_id": "1740318056713101314",
       "db_type": "MYSQL",
+      "base-url": "jdbc:mysql://111.172.106.210:60173/DB_SOURCE?useUnicode=yes&characterEncoding=UTF-8&useSSL=false&serverTimezone=UTC&zeroDateTimeBehavior=convertToNull&tinyInt1isBit=false",
+      "password": "XIJIAgreat2020!$",
+      "startup.mode": "initial",
+      "query": "select * from DB_SOURCE.score_src",
       "table-names": [
-        "renshi.student"
+        "DB_SOURCE.score_src"
       ],
-      "query": "select * from renshi.student",
+      "db_datasource_id": "1900021691394740225",
       "result_columns": [
         {
-          "autoincrement": false,
-          "database": "renshi",
-          "decimalDigit": 0,
           "fullAlias": "ID",
-          "isPrimaryKey": true,
-          "name": "ID",
           "nullable": false,
+          "typeName": "INT",
+          "isPrimaryKey": true,
+          "remark": "",
+          "type": "INT",
+          "database": "DB_SOURCE",
+          "decimalDigit": 0,
+          "size": 4,
+          "autoincrement": true,
+          "name": "ID",
+          "table": "score_src",
           "order": 1,
           "primaryKey": true,
-          "remark": "",
-          "size": 0,
-          "table": "student",
-          "type": "INT",
-          "typeName": "INT"
+          "sourceColumn": "1900021691394740225..score_src.ID"
         },
         {
-          "autoincrement": false,
-          "database": "renshi",
-          "decimalDigit": 0,
-          "fullAlias": "name",
-          "isPrimaryKey": false,
-          "name": "name",
+          "fullAlias": "SNO",
           "nullable": true,
+          "typeName": "CHAR",
+          "isPrimaryKey": false,
+          "remark": "",
+          "type": "CHAR",
+          "database": "DB_SOURCE",
+          "decimalDigit": 0,
+          "size": 255,
+          "autoincrement": false,
+          "name": "SNO",
+          "table": "score_src",
           "order": 2,
           "primaryKey": false,
-          "remark": "",
-          "size": 255,
-          "table": "student",
-          "type": "VARCHAR",
-          "typeName": "VARCHAR"
+          "sourceColumn": "1900021691394740225..score_src.SNO"
         },
         {
-          "autoincrement": false,
-          "database": "renshi",
-          "decimalDigit": 0,
-          "fullAlias": "age",
-          "isPrimaryKey": false,
-          "name": "age",
+          "fullAlias": "COURSE",
           "nullable": true,
+          "typeName": "CHAR",
+          "isPrimaryKey": false,
+          "remark": "",
+          "type": "CHAR",
+          "database": "DB_SOURCE",
+          "decimalDigit": 0,
+          "size": 255,
+          "autoincrement": false,
+          "name": "COURSE",
+          "table": "score_src",
           "order": 3,
           "primaryKey": false,
+          "sourceColumn": "1900021691394740225..score_src.COURSE"
+        },
+        {
+          "fullAlias": "SCORE",
+          "nullable": true,
+          "typeName": "CHAR",
+          "isPrimaryKey": false,
           "remark": "",
-          "size": 0,
-          "table": "student",
-          "type": "INT",
-          "typeName": "INT"
+          "type": "CHAR",
+          "database": "DB_SOURCE",
+          "decimalDigit": 0,
+          "size": 255,
+          "autoincrement": false,
+          "name": "SCORE",
+          "table": "score_src",
+          "order": 4,
+          "primaryKey": false,
+          "sourceColumn": "1900021691394740225..score_src.SCORE"
+        },
+        {
+          "fullAlias": "BDATE",
+          "nullable": true,
+          "defaultValue": "CURRENT_TIMESTAMP(3)",
+          "typeName": "TIMESTAMP",
+          "isPrimaryKey": false,
+          "remark": "",
+          "type": "TIMESTAMP",
+          "database": "DB_SOURCE",
+          "decimalDigit": 0,
+          "size": 26,
+          "autoincrement": false,
+          "name": "BDATE",
+          "table": "score_src",
+          "order": 5,
+          "primaryKey": false,
+          "sourceColumn": "1900021691394740225..score_src.BDATE"
         }
       ],
-      "result_table_name": "t1"
+      "result_table_name": "t1",
+      "plugin_name": "MySQL-CDC",
+      "user": "root",
+      "username": "root"
     }
   ],
   "transform": [],
   "sink": [
     {
-      "plugin_name": "JDBC",
-      "generate_sink_sql": true,
-      "primary_keys": [
-        "id"
-      ],
-      "db_type": "MYSQL",
-      "url": "jdbc:mysql://192.168.9.63:30316/renshi?useUnicode=yes&characterEncoding=UTF-8&useSSL=false&serverTimezone=UTC",
-      "driver": "com.mysql.cj.jdbc.Driver",
-      "user": "root",
-      "database": "renshi",
-      "password": "PANGUmysql2023:)",
-      "db_datasource_id": "1740318056713101314",
+      "db_type": "CLICKHOUSE",
       "dbSchema": "",
-      "table": "student_target",
-      "field_mapper": {
-        "ID": "id",
-        "name": "name",
-        "age": "age"
-      },
+      "primary_keys": [
+        "ID"
+      ],
+      "code_mapper": {},
+      "db_datasource_id": "1823249620522811394",
       "source_table_name": [
         "t1"
-      ]
+      ],
+      "plugin_name": "JDBC",
+      "url": "jdbc:clickhouse://172.17.3.70:8123,172.17.3.71:8123,172.17.3.69:8123/USR_ODS_DB?socket_timeout=60000",
+      "value_mapper": {
+        "0": "ID",
+        "1": "SNO",
+        "2": "COURSE",
+        "3": "SCORE",
+        "4": "BDATE"
+      },
+      "database": "USR_ODS_DB",
+      "password": "Xjcz#qwe20200720#ods",
+      "driver": "com.clickhouse.jdbc.ClickHouseDriver",
+      "field_mapper": {
+        "BDATE": "BDATE",
+        "SCORE": "SCORE",
+        "SNO": "SNO",
+        "ID": "ID",
+        "COURSE": "COURSE"
+      },
+      "generate_sink_sql": true,
+      "user": "usr_ods",
+      "table": "t_sstbcsxt_score_src"
     }
   ]
 }

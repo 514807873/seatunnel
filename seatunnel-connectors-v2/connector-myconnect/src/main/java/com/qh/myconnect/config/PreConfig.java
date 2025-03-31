@@ -1,5 +1,6 @@
 package com.qh.myconnect.config;
 
+import org.apache.commons.lang3.StringUtils;
 import org.apache.seatunnel.api.configuration.util.OptionMark;
 
 //import com.clickhouse.jdbc.internal.ClickHouseConnectionImpl;
@@ -47,6 +48,8 @@ public class PreConfig implements Serializable {
 
     @OptionMark(description = "增量拉链模式下 拉链表三个字段名")
     private List<String> zipperColumns;
+    @OptionMark(description = "增量拉链模式下 插入修改删除3个字段的值(默认I,U,D)")
+    private List<String> zipperFlagValue;
 
     @OptionMark(description = "自动时间戳")
     private boolean autoTimestamp = false;
@@ -60,6 +63,9 @@ public class PreConfig implements Serializable {
 
     @OptionMark(description = "操作类型字段名")
     private String recordOperateColumnName;
+
+    @OptionMark(description = "预执行sql")
+    private String preSql;
 
     public PreConfig() {
     }
@@ -77,6 +83,12 @@ public class PreConfig implements Serializable {
             && this.cleanTableWhenCompleteNoDataIn) {
             try (Statement st = connection.createStatement()) {
                 st.execute(JdbcDialectFactory.getJdbcDialect(jdbcSinkConfig.getDbType()).truncateTable(jdbcSinkConfig));
+            }
+        }
+        if(this.insertMode.equalsIgnoreCase("complete") && !this.cleanTableWhenComplete ){
+            if(StringUtils.isNotBlank(this.preSql)){
+                PreparedStatement preparedStatement = connection.prepareStatement(this.preSql);
+                preparedStatement.execute();
             }
         }
 
@@ -135,8 +147,13 @@ public class PreConfig implements Serializable {
                         connection.prepareStatement(
                                 JdbcDialectFactory.getJdbcDialect(jdbcSinkConfig.getDbType())
                                         .createIndex(tmpTableName, jdbcSinkConfig));
-                preparedStatement2.execute();
-                preparedStatement2.close();
+                try {
+                    preparedStatement2.execute();
+                } catch (SQLException e) {
+                    System.out.println("无法创建索引,不影响作业运行,运行效率会变慢");
+                }finally {
+                    preparedStatement2.close();
+                }
             }
             if (jdbcSinkConfig.getDbType().equalsIgnoreCase("pgsql")) {
                 PreparedStatement preparedStatement = connection.prepareStatement(

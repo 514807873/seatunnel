@@ -49,6 +49,7 @@ public class JdbcSinkConfig implements Serializable {
     private String dbSchema;
     private String dbDatasourceId;
     private boolean openQuality;
+    private List<QualityFieldRule> qualityFieldRule;
     private int batchSize;
 
     public static JdbcSinkConfig of(ReadonlyConfig config) {
@@ -73,7 +74,7 @@ public class JdbcSinkConfig implements Serializable {
         config.getOptional(JdbcOptions.CODE_MAPPER).ifPresent(builder::codeMapper);
         config.getOptional(JdbcOptions.DB_DATASOURCE_ID).ifPresent(builder::dbDatasourceId);
         config.getOptional(JdbcOptions.openQuality).ifPresent(builder::openQuality);
-        ;
+        config.getOptional(JdbcOptions.qualityFieldRule).ifPresent(builder::qualityFieldRule);
         return builder.build();
     }
 }

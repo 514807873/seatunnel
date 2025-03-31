@@ -1,9 +1,11 @@
 package com.qh.myconnect.sink;
 
-import com.alibaba.fastjson2.JSONWriter;
 import com.qh.myconnect.config.MidCount;
+import com.qh.myconnect.config.QualityFieldRule;
 import com.qh.myconnect.converter.CodeConverter;
 import com.qh.myconnect.dialect.trino.TrinoDialect;
+import com.xjgreat.quality.checker.common.check.RuleChecker;
+import com.xjgreat.quality.checker.common.check.SimpleRuleChecker;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.seatunnel.api.common.JobContext;
 import org.apache.seatunnel.api.configuration.ReadonlyConfig;
@@ -11,11 +13,8 @@ import org.apache.seatunnel.api.table.type.SeaTunnelRow;
 import org.apache.seatunnel.api.table.type.SeaTunnelRowType;
 import org.apache.seatunnel.common.constants.JobMode;
 import org.apache.seatunnel.connectors.seatunnel.common.sink.AbstractSinkWriter;
-
-import com.alibaba.fastjson2.JSON;
 import com.qh.myconnect.config.JdbcSinkConfig;
 import com.qh.myconnect.config.PreConfig;
-import com.qh.myconnect.config.SeaTunnelJobsHistoryErrorRecord;
 import com.qh.myconnect.config.StatisticalLog;
 import com.qh.myconnect.config.TruncateTable;
 import com.qh.myconnect.config.Util;
@@ -32,11 +31,9 @@ import java.sql.ResultSetMetaData;
 import java.sql.SQLException;
 import java.sql.Statement;
 import java.time.LocalDateTime;
-import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -76,6 +73,8 @@ public class MySinkWriterComplete extends AbstractSinkWriter<SeaTunnelRow, Void>
 
     private CodeConverter converter = new CodeConverter();
     private boolean isTrino = false;
+    private final RuleChecker ruleChecker = SimpleRuleChecker.newInstance();
+
 
     public MySinkWriterComplete(SeaTunnelRowType seaTunnelRowType, Context context, ReadonlyConfig config, JobContext jobContext, Long tableCount) throws SQLException {
 
@@ -127,11 +126,8 @@ public class MySinkWriterComplete extends AbstractSinkWriter<SeaTunnelRow, Void>
 
     @Override
     public void write(SeaTunnelRow element) throws IOException {
+        assert ruleChecker != null;
         midCount.setWriteCount(midCount.getWriteCount() + 1);
-        if (this.jdbcSinkConfig.isOpenQuality()) {
-//            this.qualityCount++;
-//            return;
-        }
         if (midCount.getWriteCount() == 1 && this.preConfig.isCleanTableWhenComplete()) {
             TruncateTable truncateTable = new TruncateTable();
             truncateTable.setFlinkJobId(this.jobContext.getJobId());
@@ -156,6 +152,27 @@ public class MySinkWriterComplete extends AbstractSinkWriter<SeaTunnelRow, Void>
             }
             util.truncateTable(truncateTable);
             midCount.setDeleteCount(this.tableCount);
+        }
+        if (this.jdbcSinkConfig.isOpenQuality()) {
+            List<QualityFieldRule> rules = this.jdbcSinkConfig.getQualityFieldRule();
+            boolean bo = false;
+            for (QualityFieldRule rule : rules) {
+                Integer sourceRowPosition = columnMappers.stream()
+                        .filter(x -> x.getSinkColumnName().equalsIgnoreCase(rule.getColumnName()))
+                        .findAny()
+                        .get()
+                        .getSourceRowPosition();
+                Object field = element.getField(sourceRowPosition);
+                try {
+                    bo = SimpleRuleChecker.checkAssert(ruleChecker, rule.getTableinfoId(), rule.getFieldinfoId(), field);
+                } catch (Exception e) {
+                    throw new RuntimeException(e);
+                }
+                if (bo) {
+                    midCount.plusQualityCount();
+                    return;
+                }
+            }
         }
         this.cld.add(element);
         if (midCount.getWriteCount() % this.jdbcSinkConfig.getBatchSize() == 0 || this.jobContext.getJobMode().equals(JobMode.STREAMING)) {
@@ -190,7 +207,7 @@ public class MySinkWriterComplete extends AbstractSinkWriter<SeaTunnelRow, Void>
             // 自动更新时间戳
             if (jdbcSinkConfig.getPreConfig().isAutoTimestamp()) {
                 if (StringUtils.isNoneBlank(jdbcSinkConfig.getPreConfig().getAutoTimestampColumnName())) {
-                    String sql = jdbcDialect.modifyTimestamp(jdbcSinkConfig);
+                    String sql = jdbcDialect.modifyTimestamp(jdbcSinkConfig,conn);
                     conn.prepareStatement(sql).execute();
                     conn.commit();
                 }

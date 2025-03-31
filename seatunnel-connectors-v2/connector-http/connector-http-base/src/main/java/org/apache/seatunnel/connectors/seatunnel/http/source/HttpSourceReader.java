@@ -164,9 +164,7 @@ public class HttpSourceReader extends AbstractSingleSplitReader<SeaTunnelRow> {
                 JSONObject jsonBody = JSONObject.parseObject(body);
                 if (jsonBody == null) {
                     jsonBody = new JSONObject();
-                    jsonBody.put("a", "a");
                 }
-
                 if (jsonBody.containsKey("size")) {
                     noMoreElementFlag = false;
                     Long pageIndex = 1L;
@@ -187,6 +185,7 @@ public class HttpSourceReader extends AbstractSingleSplitReader<SeaTunnelRow> {
                     }
                 }
                 else {
+                    this.httpParameter.setBody(jsonBody.toString());
                     pollAndCollectData(output);
                 }
 
@@ -238,7 +237,6 @@ public class HttpSourceReader extends AbstractSingleSplitReader<SeaTunnelRow> {
         JSONObject jsonBody = JSONObject.parseObject(body);
         if (jsonBody == null) {
             jsonBody = new JSONObject();
-            jsonBody.put("a", "a");
         }
         if (jsonBody.containsKey("size")) {
             int readSize = JsonUtils.stringToJsonNode(data).size();

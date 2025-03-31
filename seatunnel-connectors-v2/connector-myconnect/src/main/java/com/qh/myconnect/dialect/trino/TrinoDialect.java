@@ -25,6 +25,7 @@ import com.qh.myconnect.converter.JdbcRowConverter;
 import com.qh.myconnect.dialect.JdbcDialect;
 import com.qh.myconnect.dialect.JdbcDialectTypeMapper;
 import org.apache.commons.lang3.StringUtils;
+import org.apache.commons.lang3.exception.ExceptionUtils;
 import org.apache.seatunnel.api.common.JobContext;
 import org.apache.seatunnel.api.table.type.SeaTunnelRow;
 import org.stringtemplate.v4.ST;
@@ -179,7 +180,7 @@ public class TrinoDialect implements JdbcDialect {
             psUpsert.clearBatch();
             psUpsert.close();
         } catch (Exception e) {
-            log.error("错误sql:" + sql, e);
+            log.error("错误sql:" + sql, ExceptionUtils.getStackTrace(e));
             insertCount = tmpInsertCount;
             throw new RuntimeException(e);
 

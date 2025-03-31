@@ -11,6 +11,7 @@ import com.qh.myconnect.converter.ColumnMapper;
 import com.qh.myconnect.converter.JdbcRowConverter;
 import com.qh.myconnect.dialect.JdbcDialect;
 import com.qh.myconnect.dialect.JdbcDialectTypeMapper;
+
 import java.io.StringWriter;
 import java.math.BigDecimal;
 import java.sql.Connection;
@@ -58,11 +59,14 @@ public class ClickHouseDialect implements JdbcDialect {
             List<ColumnMapper> columnMappers, int rowSize, JdbcSinkConfig jdbcSinkConfig) {
         List<ColumnMapper> ucColumns =
                 columnMappers.stream().filter(ColumnMapper::isUc).collect(Collectors.toList());
+        String insetFlagValue = jdbcSinkConfig.getPreConfig().getZipperFlagValue().get(0);
+        String updateFlagValue = jdbcSinkConfig.getPreConfig().getZipperFlagValue().get(1);
+        String deleteFlagValue = jdbcSinkConfig.getPreConfig().getZipperFlagValue().get(2);
         String sqlQueryString =
                 " select "
                 + " <columns:{sub |   <if(sub.uc)> `<sub.sinkColumnName>` <else> argMax( `<sub.sinkColumnName>`, OPERATETIME) as  `<sub.sinkColumnName>`  <endif>   }; separator=\", \"> "
                 + "  from `<table>` "
-                + " where OPERATEFLAG in ('I', 'U') "
+                + " where OPERATEFLAG in ('" + insetFlagValue + "', '" + updateFlagValue + "') "
                 + " and <filter> "
                 + " group by <ucs:{uc | `<uc.sinkColumnName>`   }; separator=\", \"> "
                 + " order by <ucs:{uc | `<uc.sinkColumnName>`   }; separator=\" ,\"> ";
@@ -184,6 +188,9 @@ public class ClickHouseDialect implements JdbcDialect {
 
     public int deleteDataLogic(
             Connection connection, String table, String ucTable, List<ColumnMapper> ucColumns, PreConfig preConfig) {
+        String insetFlagValue = preConfig.getZipperFlagValue().get(0);
+        String updateFlagValue = preConfig.getZipperFlagValue().get(1);
+        String deleteFlagValue = preConfig.getZipperFlagValue().get(2);
         String operateColumnName = preConfig.getRecordOperateColumnName();
         String timestampColumnName = preConfig.getAutoTimestampColumnName();
         LocalDateTime now = LocalDateTime.now();
@@ -191,7 +198,7 @@ public class ClickHouseDialect implements JdbcDialect {
         String timestampValue = now.format(formatter);
         String querySql =
                 "select count(1) sl from  `<table>`   WHERE (<pks:{pk | `<pk.sinkColumnName>`}; separator=\", \">) NOT IN   (SELECT  <pks:{pk | `<pk.sinkColumnName>`}; separator=\", \"> FROM `<ucTable>`  ) "
-                + " and <operateColumnName> !='D'";
+                + " and <operateColumnName> !='" + deleteFlagValue + "'";
         ST st = new ST(querySql);
         st.add("table", table);
         st.add("ucTable", ucTable);
@@ -204,9 +211,9 @@ public class ClickHouseDialect implements JdbcDialect {
 
         String delSql =
                 "ALTER  TABLE <table> update  "
-                + " <operateColumnName>='D',<timestampColumnName>='<timestampValue>'"
+                + " <operateColumnName>='" + deleteFlagValue + "',<timestampColumnName>='<timestampValue>'"
                 + "WHERE (<pks:{pk | `<pk.sinkColumnName>`}; separator=\", \">) NOT IN   (SELECT  <pks:{pk | `<pk.sinkColumnName>`}; separator=\", \"> FROM `<ucTable>`  ) "
-                + " and <operateColumnName> !='D'";
+                + " and <operateColumnName> !='" + deleteFlagValue + "'";
         ST template = new ST(delSql);
         template.add("table", table);
         template.add("ucTable", ucTable);
@@ -307,6 +314,9 @@ public class ClickHouseDialect implements JdbcDialect {
             String clusterName,
             PreConfig preConfig
     ) {
+        String insetFlagValue = preConfig.getZipperFlagValue().get(0);
+        String updateFlagValue = preConfig.getZipperFlagValue().get(1);
+        String deleteFlagValue = preConfig.getZipperFlagValue().get(2);
         String operateColumnName = preConfig.getRecordOperateColumnName();
         String timestampColumnName = preConfig.getAutoTimestampColumnName();
         LocalDateTime now = LocalDateTime.now();
@@ -315,7 +325,7 @@ public class ClickHouseDialect implements JdbcDialect {
         String querySql =
                 "select count(1) sl from  `<table>`   WHERE (<pks:{pk | `<pk.sinkColumnName>`}; separator=\", \">) NOT IN   "
                 + "(SELECT  <pks:{pk | `<pk.sinkColumnName>`}; separator=\", \"> FROM `<ucTable>` )"
-                + " and (<operateColumnName> != 'D' or <operateColumnName> is null) ";
+                + " and (<operateColumnName> != '" + deleteFlagValue + "' or <operateColumnName> is null) ";
         ST st = new ST(querySql);
         st.add("table", table);
         st.add("ucTable", ucTable);
@@ -329,7 +339,7 @@ public class ClickHouseDialect implements JdbcDialect {
                 + "<timestampColumnName>='<timestampValue>'  WHERE (<pks:{pk | `<pk.sinkColumnName>`}; separator=\", "
                 + "\">) NOT IN   (SELECT  <pks:{pk | `<pk.sinkColumnName>`}; separator=\", \"> FROM "
                 + "`<ucTable>` ) "
-                + " and (<operateColumnName> != 'D' or <operateColumnName> is null) "
+                + " and (<operateColumnName> != '" + deleteFlagValue + "' or <operateColumnName> is null) "
                 + "SETTINGS "
                 + "allow_nondeterministic_mutations = 1 ";
         ST template = new ST(delSql);
@@ -338,7 +348,7 @@ public class ClickHouseDialect implements JdbcDialect {
         template.add("pks", ucColumns);
         template.add("clusterName", clusterName);
         template.add("operateColumnName", operateColumnName);
-        template.add("operateValue", 'D');
+        template.add("operateValue", deleteFlagValue);
         template.add("timestampColumnName", timestampColumnName);
         template.add("timestampValue", timestampValue);
         PreparedStatement preparedStatement = null;
@@ -368,6 +378,9 @@ public class ClickHouseDialect implements JdbcDialect {
         String OPERATEFLAG = jdbcSinkConfig.getPreConfig().getZipperColumns().get(0);
         String OPERATETIME = jdbcSinkConfig.getPreConfig().getZipperColumns().get(1);
         String OPERATETIME_END = jdbcSinkConfig.getPreConfig().getZipperColumns().get(2);
+        String insetFlagValue = jdbcSinkConfig.getPreConfig().getZipperFlagValue().get(0);
+        String updateFlagValue = jdbcSinkConfig.getPreConfig().getZipperFlagValue().get(1);
+        String deleteFlagValue = jdbcSinkConfig.getPreConfig().getZipperFlagValue().get(2);
         LocalDateTime now = LocalDateTime.now();
         DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
         String currentTimeString = now.format(formatter);
@@ -391,7 +404,7 @@ public class ClickHouseDialect implements JdbcDialect {
                 "select count(1) sl from  `<table>`   "
                 + "WHERE (<pks:{pk | `<pk.sinkColumnName>`}; separator=\", \">) "
                 + "NOT IN   (SELECT  <pks:{pk | `<pk.sinkColumnName>`}; separator=\", \"> FROM `<ucTable>`  ) "
-                + " and " + OPERATETIME_END + " is null and " + OPERATEFLAG + " in ('I','U') ";
+                + " and " + OPERATETIME_END + " is null and " + OPERATEFLAG + " in ('" + insetFlagValue + "','" + updateFlagValue + "') ";
         ST st = new ST(querySql);
         st.add("table", zipperTable);
         st.add("ucTable", originTable);
@@ -403,10 +416,10 @@ public class ClickHouseDialect implements JdbcDialect {
         String insertDelSql =
                 "insert into  `<table>` (<allColumns>) "
                 + "select <columns>,"
-                + " 'D' " + OPERATEFLAG + ","
+                + " '" + deleteFlagValue + "' " + OPERATEFLAG + ","
                 + "'" + currentTimeString + "' " + OPERATETIME + ", "
                 + "'" + currentTimeString + "' " + OPERATETIME_END + " "
-                + " from (select * from  <table> where " + OPERATETIME_END + " IS NULL and " + OPERATEFLAG + " in ('I','U') " + " ) a "
+                + " from (select * from  <table> where " + OPERATETIME_END + " IS NULL and " + OPERATEFLAG + " in ('" + insetFlagValue + "','" + updateFlagValue + "') " + " ) a "
                 + "   WHERE (<pks:{pk | `<pk.sinkColumnName>`}; "
                 + "separator=\", "
                 + "\">) NOT IN   (SELECT  <pks:{pk | `<pk.sinkColumnName>`}; separator=\", \"> FROM "
@@ -432,7 +445,7 @@ public class ClickHouseDialect implements JdbcDialect {
                 + "separator=\", "
                 + "\">) NOT IN   (SELECT  <pks:{pk | `<pk.sinkColumnName>`}; separator=\", \"> FROM "
                 + "`<ucTable>`  ) "
-                + " and " + OPERATETIME_END + " IS NULL and " + OPERATEFLAG + " in ('I','U') "
+                + " and " + OPERATETIME_END + " IS NULL and " + OPERATEFLAG + " in ('" + insetFlagValue + "','" + updateFlagValue + "') "
                 + " SETTINGS allow_nondeterministic_mutations = 1 ";
         ST template = new ST(delSql);
         template.add("table", zipperTable);
@@ -467,6 +480,11 @@ public class ClickHouseDialect implements JdbcDialect {
         String OPERATEFLAG = jdbcSinkConfig.getPreConfig().getZipperColumns().get(0);
         String OPERATETIME = jdbcSinkConfig.getPreConfig().getZipperColumns().get(1);
         String OPERATETIME_END = jdbcSinkConfig.getPreConfig().getZipperColumns().get(2);
+
+        String insetFlagValue = jdbcSinkConfig.getPreConfig().getZipperFlagValue().get(0);
+        String updateFlagValue = jdbcSinkConfig.getPreConfig().getZipperFlagValue().get(1);
+        String deleteFlagValue = jdbcSinkConfig.getPreConfig().getZipperFlagValue().get(2);
+
         LocalDateTime now = LocalDateTime.now();
         DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
         String currentTimeString = now.format(formatter);
@@ -490,11 +508,13 @@ public class ClickHouseDialect implements JdbcDialect {
                 "select count(1) sl from  `<table>`   "
                 + "WHERE (<pks:{pk | `<pk.sinkColumnName>`}; separator=\", \">) "
                 + "NOT IN   (SELECT  <pks:{pk | `<pk.sinkColumnName>`}; separator=\", \"> FROM `<ucTable>`  ) "
-                + " and " + OPERATETIME_END + " is null and " + OPERATEFLAG + " in ('I','U') ";
+                + " and " + OPERATETIME_END + " is null and " + OPERATEFLAG + " in ('<insetFlagValue>','<updateFlagValue>') ";
         ST st = new ST(querySql);
         st.add("table", zipperTable);
         st.add("ucTable", originTable);
         st.add("pks", ucColumns);
+        st.add("insetFlagValue", insetFlagValue);
+        st.add("updateFlagValue", updateFlagValue);
         PreparedStatement query = null;
         int del = 0;
 
@@ -502,10 +522,11 @@ public class ClickHouseDialect implements JdbcDialect {
         String insertDelSql =
                 "insert into  `<table>` (<allColumns>) "
                 + "select <columns>,"
-                + " 'D' " + OPERATEFLAG + ","
+                + " '<deleteFlagValue>' " + OPERATEFLAG + ","
                 + "'" + currentTimeString + "' " + OPERATETIME + ", "
                 + "'" + currentTimeString + "' " + OPERATETIME_END + " "
-                + " from (select * from  <table> where " + OPERATETIME_END + " IS NULL and " + OPERATEFLAG + " in ('I','U') " + " ) a "
+                + " from (select * from  <table> where " + OPERATETIME_END + " IS NULL and " + OPERATEFLAG + " in "
+                + "('<insetFlagValue>','<updateFlagValue>') " + " ) a "
                 + "   WHERE (<pks:{pk | `<pk.sinkColumnName>`}; "
                 + "separator=\", "
                 + "\">) NOT IN   (SELECT  <pks:{pk | `<pk.sinkColumnName>`}; separator=\", \"> FROM "
@@ -516,6 +537,9 @@ public class ClickHouseDialect implements JdbcDialect {
         template1.add("columns", StringUtils.join(newColumns, ","));
         template1.add("allColumns", StringUtils.join(allColumns, ","));
         template1.add("pks", ucColumns);
+        template1.add("insetFlagValue", insetFlagValue);
+        template1.add("updateFlagValue", updateFlagValue);
+        template1.add("deleteFlagValue", deleteFlagValue);
         String render = template1.render();
         try {
             connection.createStatement().execute(render);
@@ -531,13 +555,15 @@ public class ClickHouseDialect implements JdbcDialect {
                 + "separator=\", "
                 + "\">) NOT IN   (SELECT  <pks:{pk | `<pk.sinkColumnName>`}; separator=\", \"> FROM "
                 + "`<ucTable>`  ) "
-                + " and " + OPERATETIME_END + " IS NULL and " + OPERATEFLAG + " in ('I','U') "
+                + " and " + OPERATETIME_END + " IS NULL and " + OPERATEFLAG + " in ('<insetFlagValue>','<updateFlagValue>') "
                 + " SETTINGS allow_nondeterministic_mutations = 1 ";
         ST template = new ST(delSql);
         template.add("table", zipperTable);
         template.add("ucTable", originTable);
         template.add("pks", ucColumns);
         template.add("clusterName", clusterName);
+        template.add("insetFlagValue", insetFlagValue);
+        template.add("updateFlagValue", updateFlagValue);
         PreparedStatement preparedStatement = null;
         try {
             query = connection.prepareStatement(st.render());
@@ -581,7 +607,6 @@ public class ClickHouseDialect implements JdbcDialect {
         return "alter  table " +
                quoteIdentifier(jdbcSinkConfig.getPreConfig().getZipperTableName()) +
                " update "
-//               + quoteIdentifier(OPERATEFLAG) + "='U',"
                + quoteIdentifier(columnName) + " = " + "'" + currentTimeString + "'" +
                " where " + quoteIdentifier(columnName) + " is null and " +
                StringUtils.join(ucColumns.stream().map(x -> quoteIdentifier(x) + " =? ").collect(Collectors.toList()), " and ");
