@@ -1,6 +1,7 @@
 package com.qh.myconnect.dialect;
 
 import com.qh.myconnect.dialect.ClickHouse.ClickHouseDialect;
+import com.qh.myconnect.dialect.dameng.DaMengDialect;
 import com.qh.myconnect.dialect.mysql.MysqlDialect;
 import com.qh.myconnect.dialect.oracle.OracleDialect;
 import com.qh.myconnect.dialect.pgsql.PostgresDialect;
@@ -20,6 +21,7 @@ public class JdbcDialectFactory {
                     put("pgsql", new PostgresDialect());
                     put("sqlserver", new SqlServerDialect());
                     put("trino", new TrinoDialect());
+                    put("dameng", new DaMengDialect());
                 }
             };
 

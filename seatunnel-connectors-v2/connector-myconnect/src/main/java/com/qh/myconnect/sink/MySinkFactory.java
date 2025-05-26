@@ -59,6 +59,7 @@ public class MySinkFactory implements TableSinkFactory {
                         JdbcOptions.SUPPORT_UPSERT_BY_QUERY_PRIMARY_KEY_EXIST,
                         JdbcOptions.FIELD_MAPPER,
                         JdbcOptions.CODE_MAPPER,
+                        JdbcOptions.DECODE_MAPPER,
                         JdbcOptions.PRE_CONFIG,
                         JdbcOptions.PRIMARY_KEYS)
                 .conditional(

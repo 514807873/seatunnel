@@ -96,6 +96,7 @@ public class ClickHouseTypeMapper implements JdbcDialectTypeMapper {
 
     // ------------------------------time-------------------------
     private static final String CLICKHOUSE_DATE = "DATE";
+    private static final String CLICKHOUSE_DATE32 = "DATE32";
     private static final String CLICKHOUSE_NULLABLE_DATE = "NULLABLE(DATE)";
     private static final String CLICKHOUSE_DATETIME = "DATETIME";
     private static final String CLICKHOUSE_TIME = "TIME";
@@ -189,6 +190,7 @@ public class ClickHouseTypeMapper implements JdbcDialectTypeMapper {
             case CLICKHOUSE_NOTHING :
                 return BasicType.STRING_TYPE;
             case CLICKHOUSE_DATE:
+            case CLICKHOUSE_DATE32:
             case CLICKHOUSE_NULLABLE_DATE:
                 return LocalTimeType.LOCAL_DATE_TYPE;
             case CLICKHOUSE_TIME:

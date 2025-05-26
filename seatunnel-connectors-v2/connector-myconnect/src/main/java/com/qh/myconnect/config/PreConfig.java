@@ -1,5 +1,6 @@
 package com.qh.myconnect.config;
 
+import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.seatunnel.api.configuration.util.OptionMark;
 
@@ -16,6 +17,7 @@ import java.util.List;
 import java.util.Objects;
 
 @Data
+@Slf4j
 public class PreConfig implements Serializable {
     private static final long serialVersionUID = -1L;
 
@@ -42,6 +44,9 @@ public class PreConfig implements Serializable {
 
     @OptionMark(description = "增量更新模式下 是否开启数据删除操作")
     private boolean openDelete = true;
+
+    @OptionMark(description = "增量更新模式下 是否关闭对比 true 关闭 false 不关闭 ")
+    private boolean dontCompare = false;
 
     @OptionMark(description = "增量拉链模式下 拉链表的表名称")
     private String zipperTableName;
@@ -85,8 +90,9 @@ public class PreConfig implements Serializable {
                 st.execute(JdbcDialectFactory.getJdbcDialect(jdbcSinkConfig.getDbType()).truncateTable(jdbcSinkConfig));
             }
         }
-        if(this.insertMode.equalsIgnoreCase("complete") && !this.cleanTableWhenComplete ){
-            if(StringUtils.isNotBlank(this.preSql)){
+        if (this.insertMode.equalsIgnoreCase("complete") && !this.cleanTableWhenComplete) {
+            if (StringUtils.isNotBlank(this.preSql)) {
+                log.info("执行了预定义sql" + this.preSql);
                 PreparedStatement preparedStatement = connection.prepareStatement(this.preSql);
                 preparedStatement.execute();
             }
@@ -123,19 +129,27 @@ public class PreConfig implements Serializable {
                     drop.execute();
                     drop.close();
                 } catch (SQLException e) {
-                    System.out.println("删除报错意味着没有表");
+                    log.info("删除报错意味着没有表");
                 }
             }
             else {
                 String dropSql =
                         JdbcDialectFactory.getJdbcDialect(jdbcSinkConfig.getDbType())
                                 .dropTable(jdbcSinkConfig, tmpTableName);
-                try {
-                    PreparedStatement drop = connection.prepareStatement(dropSql);
+                try (PreparedStatement drop = connection.prepareStatement(dropSql)) {
                     drop.execute();
-                    drop.close();
                 } catch (SQLException e) {
-                    System.out.println(dropSql + "删除报错意味着没有表" + e.getMessage());
+                    log.info(dropSql + "删除报错临时表出错,不一定影响作业运行,无需担心." + e.getMessage());
+                    String truncateTableSql =
+                            JdbcDialectFactory.getJdbcDialect(jdbcSinkConfig.getDbType())
+                                    .truncateTable(jdbcSinkConfig, tmpTableName);
+                    try (PreparedStatement preparedStatement = connection.prepareStatement(truncateTableSql)) {
+                        log.info("万一删除临时表报错，保险起见执行一次清空临时表");
+                        preparedStatement.execute();
+                        connection.commit();
+                    } catch (SQLException ex) {
+                        log.info("");
+                    }
                 }
             }
             PreparedStatement preparedStatement1 =
@@ -150,8 +164,8 @@ public class PreConfig implements Serializable {
                 try {
                     preparedStatement2.execute();
                 } catch (SQLException e) {
-                    System.out.println("无法创建索引,不影响作业运行,运行效率会变慢");
-                }finally {
+                    log.info("无法创建索引,不影响作业运行,运行效率会变慢");
+                } finally {
                     preparedStatement2.close();
                 }
             }
@@ -191,7 +205,7 @@ public class PreConfig implements Serializable {
                     drop.execute();
                     drop.close();
                 } catch (SQLException e) {
-                    System.out.println("删除报错意味着没有表");
+                    log.info("删除报错意味着没有表");
                 }
             }
             else {
@@ -203,7 +217,7 @@ public class PreConfig implements Serializable {
                     drop.execute();
                     drop.close();
                 } catch (SQLException e) {
-                    System.out.println(dropSql + "删除报错意味着没有表" + e.getMessage());
+                    log.info(dropSql + "删除报错意味着没有表" + e.getMessage());
                 }
             }
         }

@@ -25,6 +25,7 @@ import com.qh.myconnect.config.PreConfig;
 import com.qh.myconnect.config.SeaTunnelJobsHistoryErrorRecord;
 import com.qh.myconnect.config.Util;
 import com.qh.myconnect.dialect.ClickHouse.ClickHouseDialect;
+import com.qh.myconnect.dialect.dameng.DaMengDialect;
 import com.qh.myconnect.dialect.oracle.OracleDialect;
 import com.qh.myconnect.dialect.pgsql.PostgresDialect;
 
@@ -556,6 +557,10 @@ public interface JdbcDialect extends Serializable {
         return String.format("truncate  table %s", jdbcSinkConfig.getTable());
     }
 
+    default String truncateTable(JdbcSinkConfig jdbcSinkConfig,String tableName) {
+        return String.format("truncate  table %s", tableName);
+    }
+
     default String dropTable(JdbcSinkConfig jdbcSinkConfig, String tableName) {
         return String.format("drop table  %s", "`" + tableName + "`");
     }
@@ -637,6 +642,30 @@ public interface JdbcDialect extends Serializable {
         return del;
     }
 
+
+    default int deleteDataInUc(Connection connection, String table, String ucTable, List<ColumnMapper> ucColumns) {
+        String delSql =
+                "delete from  <table>    "
+                + " where  exists "
+                + "       (select  <pks:{pk | <pk.sinkColumnName>}; separator=\" , \"> from <tmpTable> where <pks:{pk | <table>.<pk.sinkColumnName>=<tmpTable>.<pk.sinkColumnName> }; separator=\" and \">  ) ";
+        ST template = new ST(delSql);
+        template.add("table", table);
+        template.add("tmpTable", ucTable);
+        template.add("pks", ucColumns);
+        PreparedStatement preparedStatement = null;
+        int del = 0;
+        try {
+            preparedStatement = connection.prepareStatement(template.render());
+            log.info("覆盖插入前执行的删除语句:" + template.render());
+            del = preparedStatement.executeUpdate();
+            connection.commit();
+            preparedStatement.close();
+        } catch (SQLException e) {
+            throw new RuntimeException(e);
+        }
+        return del;
+    }
+
     default int deleteDataLogic(
             Connection connection,
             String table,
@@ -704,6 +733,7 @@ public interface JdbcDialect extends Serializable {
                 OPERATETIME_END = OPERATETIME_END.toLowerCase();
                 break;
             case "ORACLE":
+            case "DAMENG":
                 OPERATEFLAG = OPERATEFLAG.toUpperCase();
                 OPERATETIME = OPERATETIME.toUpperCase();
                 OPERATETIME_END = OPERATETIME_END.toUpperCase();
@@ -721,7 +751,7 @@ public interface JdbcDialect extends Serializable {
                 "insert into  <table> (<allColumns>) "
                 + "select <columns>,"
                 + " '<deleteFlagValue>' " + OPERATEFLAG + ","
-                + currentTimeString  + OPERATETIME + ", "
+                + currentTimeString + OPERATETIME + ", "
                 + currentTimeString + " " + OPERATETIME_END + " "
                 + " from (select * from  <table> where " + OPERATETIME_END + " IS NULL and " + OPERATEFLAG + " in ('<insetFlagValue>','<updateFlagValue>') " + " ) a "
                 + "   WHERE (<pks:{pk | <pk.sinkColumnName>}; "
@@ -1140,7 +1170,11 @@ public interface JdbcDialect extends Serializable {
         for (String column : ucColumns) {
             newUcColumns.add(quoteIdentifier(column));
         }
-        if (this instanceof OracleDialect || this instanceof PostgresDialect || this instanceof SqlServerDialect) {
+        if (this instanceof OracleDialect ||
+            this instanceof PostgresDialect ||
+            this instanceof SqlServerDialect ||
+            this instanceof DaMengDialect
+        ) {
             return String.format("select %s from %s.%s %s order by %s",
                     StringUtils.join(newColumns, ","),
                     jdbcSinkConfig.getDbSchema(),
@@ -1172,6 +1206,7 @@ public interface JdbcDialect extends Serializable {
                 OPERATETIME_END = OPERATETIME_END.toLowerCase();
                 break;
             case "ORACLE":
+            case "DAMENG":
                 OPERATETIME_END = OPERATETIME_END.toUpperCase();
             default:
                 break;
@@ -1186,7 +1221,11 @@ public interface JdbcDialect extends Serializable {
         for (String column : ucColumns) {
             newUcColumns.add(quoteIdentifier(column));
         }
-        if (this instanceof OracleDialect || this instanceof PostgresDialect || this instanceof SqlServerDialect) {
+        if (this instanceof OracleDialect ||
+            this instanceof PostgresDialect ||
+            this instanceof SqlServerDialect ||
+            this instanceof DaMengDialect
+        ) {
             return String.format("select %s from %s.%s where %s is null and %s in ('" + insetFlagValue + "','" + updateFlagValue + "') "
                                  + "order by %s",
                     StringUtils.join(newColumns, ","),
@@ -1225,7 +1264,7 @@ public interface JdbcDialect extends Serializable {
         boolean isInsert = false;
         try {
             List<String> columns = columnMappers.stream().map(ColumnMapper::getSinkColumnName).collect(Collectors.toList());
-            List<String> values = columnMappers.stream().map(x -> "?").collect(Collectors.toList());
+            List<String> values = columnMappers.stream().map(x -> x.getValueSupplier().get()).collect(Collectors.toList());
             sql = this.insertTableSql(jdbcSinkConfig, columns, values);
             psUpsert = conn.prepareStatement(sql);
             tmpInsertCount = midCount.getInsertCount();
@@ -1283,7 +1322,7 @@ public interface JdbcDialect extends Serializable {
                                     MidCount midCount) {
         try {
             List<String> columns = columnMappers.stream().map(ColumnMapper::getSinkColumnName).collect(Collectors.toList());
-            List<String> values = columnMappers.stream().map(x -> "?").collect(Collectors.toList());
+            List<String> values = columnMappers.stream().map(x -> x.getValueSupplier().get()).collect(Collectors.toList());
             String sql = this.insertTableSql(jdbcSinkConfig, columns, values);
             for (SeaTunnelRow seaTunnelRow : seaTunnelRows) {
                 if (seaTunnelRow != null) {
@@ -1364,7 +1403,7 @@ public interface JdbcDialect extends Serializable {
                 PreparedStatement psUpsert = conn.prepareStatement(sql);
                 String columnTypeName = psUpsert.getMetaData().getColumnTypeName(1);
                 if (columnTypeName.contains("CHAR")) {
-                    return currentTimeString;
+                    return "'" + currentTimeString + "'";
                 }
                 else {
                     return String.format("to_date('%s','yyyy-mm-dd hh24:mi:ss')", currentTimeString);

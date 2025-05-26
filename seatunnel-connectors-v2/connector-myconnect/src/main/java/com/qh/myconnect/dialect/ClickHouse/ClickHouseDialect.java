@@ -170,6 +170,7 @@ public class ClickHouseDialect implements JdbcDialect {
         template.add("pks", ucColumns);
         PreparedStatement preparedStatement = null;
         try {
+            log.info("deleteData方法执行的querySql:{}", st.render());
             query = connection.prepareStatement(st.render());
             ResultSet resultSet = query.executeQuery();
             if (resultSet.next()) {
@@ -300,8 +301,11 @@ public class ClickHouseDialect implements JdbcDialect {
             else if (dbType.toUpperCase().contains("DOUBLE")) {
                 preparedStatement.setDouble(position, Double.parseDouble(value));
             }
+            else if(dbType.toUpperCase().contains("DATETIME")){
+                preparedStatement.setTimestamp(position, java.sql.Timestamp.valueOf(value));
+            }
             else {
-                preparedStatement.setString(position, value);
+                preparedStatement.setObject(position, value);
             }
         }
     }
@@ -598,7 +602,7 @@ public class ClickHouseDialect implements JdbcDialect {
         }
     }
 
-    public String updateTableSqlZipper(JdbcSinkConfig jdbcSinkConfig, List<String> ucColumns) {
+    public String updateTableSqlZipper(JdbcSinkConfig jdbcSinkConfig, List<String> ucColumns, Connection conn) {
         String columnName = jdbcSinkConfig.getPreConfig().getZipperColumns().get(2);
         String OPERATEFLAG = jdbcSinkConfig.getPreConfig().getZipperColumns().get(0);
         LocalDateTime now = LocalDateTime.now();

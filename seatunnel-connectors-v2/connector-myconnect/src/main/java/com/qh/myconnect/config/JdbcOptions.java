@@ -60,7 +60,7 @@ public interface JdbcOptions {
                     .withDescription("auto commit");
 
     Option<Integer> BATCH_SIZE =
-            Options.key("batch_size").intType().defaultValue(1000).withDescription("batch size");
+            Options.key("batchSize").intType().defaultValue(1000).withDescription("batch size");
 
     Option<Integer> FETCH_SIZE =
             Options.key("fetch_size")
@@ -157,8 +157,14 @@ public interface JdbcOptions {
                     .mapType()
                     .noDefaultValue()
                     .withDescription(
-                            "Specify the field mapping relationship between input and output");
+                            "码表转换");
 
+    Option<Map<String, String>> DECODE_MAPPER =
+            Options.key("decode_mapper")
+                    .mapType()
+                    .noDefaultValue()
+                    .withDescription(
+                            "解码转换");
     Option<PreConfig> PRE_CONFIG =
             Options.key("pre_config")
                     .objectType(PreConfig.class)

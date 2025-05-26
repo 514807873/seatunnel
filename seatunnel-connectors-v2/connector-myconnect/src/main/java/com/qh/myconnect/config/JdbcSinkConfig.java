@@ -45,6 +45,7 @@ public class JdbcSinkConfig implements Serializable {
     private String dbType;
     private Map<String, String> fieldMapper;
     private Map<String, String> codeMapper;
+    private Map<String, String> decodeMapper;
     private String driver;
     private String dbSchema;
     private String dbDatasourceId;
@@ -72,6 +73,7 @@ public class JdbcSinkConfig implements Serializable {
         config.getOptional(JdbcOptions.dbSchema).ifPresent(builder::dbSchema);
         config.getOptional(JdbcOptions.FIELD_MAPPER).ifPresent(builder::fieldMapper);
         config.getOptional(JdbcOptions.CODE_MAPPER).ifPresent(builder::codeMapper);
+        config.getOptional(JdbcOptions.DECODE_MAPPER).ifPresent(builder::decodeMapper);
         config.getOptional(JdbcOptions.DB_DATASOURCE_ID).ifPresent(builder::dbDatasourceId);
         config.getOptional(JdbcOptions.openQuality).ifPresent(builder::openQuality);
         config.getOptional(JdbcOptions.qualityFieldRule).ifPresent(builder::qualityFieldRule);

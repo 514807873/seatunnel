@@ -16,6 +16,9 @@
  */
 package org.apache.seatunnel.connectors.seatunnel.jdbc.utils;
 
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.io.InputStream;
 import java.math.BigDecimal;
 import java.sql.Date;
 import java.sql.ResultSet;
@@ -77,7 +80,20 @@ public final class JdbcFieldTypeUtils {
     }
 
     public static byte[] getBytes(ResultSet resultSet, int columnIndex) throws SQLException {
-        return resultSet.getBytes(columnIndex);
+        try (InputStream inputStream = resultSet.getBinaryStream(columnIndex)) {
+            if (inputStream == null) {
+                return null; // 如果数据库里该字段是 NULL，返回 null
+            }
+            ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
+            byte[] buffer = new byte[4096]; // 4KB 缓冲区
+            int bytesRead;
+            while ((bytesRead = inputStream.read(buffer)) != -1) {
+                outputStream.write(buffer, 0, bytesRead);
+            }
+            return outputStream.toByteArray();
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
     }
 
     private static <T> T getNullableValue(

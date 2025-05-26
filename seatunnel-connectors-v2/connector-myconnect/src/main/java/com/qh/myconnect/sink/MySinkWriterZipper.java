@@ -4,6 +4,7 @@ import com.qh.myconnect.config.MidCount;
 import com.qh.myconnect.config.QualityFieldRule;
 import com.qh.myconnect.config.SubTaskStatus;
 import com.qh.myconnect.converter.CodeConverter;
+import com.qh.myconnect.dialect.ClickHouse.ClickHouseDialect;
 import com.qh.myconnect.dialect.trino.TrinoDialect;
 import com.xjgreat.quality.checker.common.check.RuleChecker;
 import com.xjgreat.quality.checker.common.check.SimpleRuleChecker;
@@ -70,7 +71,6 @@ public class MySinkWriterZipper extends AbstractSinkWriter<SeaTunnelRow, Void> {
     private final Integer currentTaskId;
     private final RuleChecker ruleChecker = SimpleRuleChecker.newInstance();
     private final Set sqlErrorType = new HashSet();
-    private CodeConverter converter = new CodeConverter();
     private final Set<String> ignoreColumns = new HashSet<>();
     private boolean isTrino = false;
 
@@ -81,12 +81,6 @@ public class MySinkWriterZipper extends AbstractSinkWriter<SeaTunnelRow, Void> {
         this.currentTaskId = context.getIndexOfSubtask();
         log.info("currentTaskId:" + this.currentTaskId);
         this.jdbcSinkConfig = JdbcSinkConfig.of(config);
-        if (jdbcSinkConfig.getDriver().equalsIgnoreCase("com.github.housepower.jdbc.ClickHouseDriver")) {
-            this.jdbcSinkConfig.setBatchSize(50000);
-        }
-        if (jdbcSinkConfig.getBatchSize() == 0) {
-            this.jdbcSinkConfig.setBatchSize(2000);
-        }
         this.originTable = this.jdbcSinkConfig.getTable();
         this.zipperTable = this.jdbcSinkConfig.getPreConfig().getZipperTableName();
         this.preConfig = jdbcSinkConfig.getPreConfig();
@@ -99,7 +93,18 @@ public class MySinkWriterZipper extends AbstractSinkWriter<SeaTunnelRow, Void> {
         this.startTime = startTime;
         this.jdbcDialect = JdbcDialectFactory.getJdbcDialect(this.jdbcSinkConfig.getDbType());
         this.conn = util.getConnection(this.jdbcSinkConfig);
-        this.conn.setAutoCommit(false);
+        if (jdbcDialect instanceof TrinoDialect) {
+            try (Statement statement = conn.createStatement()) {
+                String setSessionQuery = "SET SESSION hive.insert_existing_partitions_behavior = 'APPEND'";
+                statement.execute(setSessionQuery);
+                this.conn.setAutoCommit(true);
+            } catch (Exception e) {
+                throw new RuntimeException("Failed to set session", e);
+            }
+        }
+        else {
+            this.conn.setAutoCommit(false);
+        }
         if (jdbcDialect instanceof TrinoDialect) {
             isTrino = true;
             try (Statement statement = conn.createStatement()) {
@@ -287,12 +292,7 @@ public class MySinkWriterZipper extends AbstractSinkWriter<SeaTunnelRow, Void> {
     private void initColumnMappers(JdbcSinkConfig jdbcSinkConfig, SeaTunnelRowType sourceRowType, SeaTunnelRowType sinkTableRowType, Connection conn) throws SQLException {
         Map<String, String> fieldMapper = jdbcSinkConfig.getFieldMapper();
         Map<String, String> codeMapper = jdbcSinkConfig.getCodeMapper();
-        if (codeMapper != null) {
-            Optional<String> any = codeMapper.values().stream().filter(x -> x.startsWith("ENCRYPT.") && containsAtLeastTwoDotsRegex(x)).findAny();
-            any.ifPresent(x -> {
-                converter = new CodeConverter(x.split("\\.")[2]);
-            });
-        }
+        Map<String, String> decodeMapper = jdbcSinkConfig.getDecodeMapper();
         Map<String, String> dmMap = new HashMap<>();
         List<String> allDms = new ArrayList<>();
         if (codeMapper != null) {
@@ -308,20 +308,29 @@ public class MySinkWriterZipper extends AbstractSinkWriter<SeaTunnelRow, Void> {
                 }
             }
         }
-        converter.setDmMap(dmMap);
-        fieldMapper.forEach((k, v) -> {
+        fieldMapper.forEach((sourceColumnName, targetColumnName) -> {
+            CodeConverter converter = new CodeConverter();
+            if (codeMapper != null) {
+                String any = codeMapper.get(targetColumnName);
+                if (any != null) {
+                    if (any.startsWith("ENCRYPT.") && containsAtLeastTwoDotsRegex(any)) {
+                        converter = new CodeConverter(any.split("\\.")[2]);
+                    }
+                }
+            }
+            converter.setDmMap(dmMap);
             ColumnMapper columnMapper = new ColumnMapper();
-            columnMapper.setSourceColumnName(k);
-            columnMapper.setSourceRowPosition(sourceRowType.indexOf(k));
-            String typeNameSS = sourceRowType.getFieldType(sourceRowType.indexOf(k)).getTypeClass().getName();
-            columnMapper.setSourceColumnTypeName(typeNameSS);
-            columnMapper.setSinkColumnName(v);
-            columnMapper.setSinkRowPosition(sinkTableRowType.indexOf(v));
-            String typeNameSK = sinkTableRowType.getFieldType(sinkTableRowType.indexOf(v)).getTypeClass().getName();
+            columnMapper.setSourceColumnName(sourceColumnName);
+            columnMapper.setSourceRowPosition(sourceRowType.indexOf(sourceColumnName));
+            String typeName = sourceRowType.getFieldType(sourceRowType.indexOf(sourceColumnName)).getTypeClass().getName();
+            columnMapper.setSourceColumnTypeName(typeName);
+            columnMapper.setSinkColumnName(targetColumnName);
+            columnMapper.setSinkRowPosition(sinkTableRowType.indexOf(targetColumnName));
+            String typeNameSK = sinkTableRowType.getFieldType(sinkTableRowType.indexOf(targetColumnName)).getTypeClass().getName();
             columnMapper.setSinkColumnTypeName(typeNameSK);
 
             for (String primaryKey : jdbcSinkConfig.getPrimaryKeys()) {
-                if (primaryKey.equalsIgnoreCase(v)) {
+                if (primaryKey.equalsIgnoreCase(targetColumnName)) {
                     columnMapper.setUc(true);
                 }
             }
@@ -329,7 +338,7 @@ public class MySinkWriterZipper extends AbstractSinkWriter<SeaTunnelRow, Void> {
                 ResultSetMetaData metaData = this.jdbcDialect.getResultSetMetaData(conn, jdbcSinkConfig);
                 for (int i = 0; i < metaData.getColumnCount(); i++) {
                     String columnName = metaData.getColumnName(i + 1);
-                    if (v.equalsIgnoreCase(columnName)) {
+                    if (targetColumnName.equalsIgnoreCase(columnName)) {
                         String columnTypeName = metaData.getColumnTypeName(i + 1);
                         columnMapper.setSinkColumnDbType(columnTypeName);
                     }
@@ -338,7 +347,7 @@ public class MySinkWriterZipper extends AbstractSinkWriter<SeaTunnelRow, Void> {
                 throw new RuntimeException(e);
             }
             if (codeMapper != null) {
-                String safeCode = codeMapper.get(v);
+                String safeCode = codeMapper.get(targetColumnName);
                 if (safeCode != null && StringUtils.isNoneBlank(safeCode)) {
                     if (safeCode.startsWith("DM")) {
                         columnMapper.setConverter(converter.dmConverter(safeCode));
@@ -346,6 +355,21 @@ public class MySinkWriterZipper extends AbstractSinkWriter<SeaTunnelRow, Void> {
                     else if (safeCode.startsWith("ENCRYPT")) {
                         columnMapper.setConverter(converter.encryptConverter(safeCode));
                     }
+                    else if (safeCode.startsWith("FUNCTION.")) {
+                        int dotIndex = safeCode.indexOf('.');
+                        String function = safeCode.substring(dotIndex + 1);
+                        columnMapper.setValueSupplier(() -> function.replace(":value", "?"));
+                    }
+                }
+            }
+            CodeConverter decodeConverter = new CodeConverter();
+            if (decodeMapper != null) {
+                String decode = decodeMapper.get(targetColumnName);
+                if (decode != null) {
+                    if (decode.startsWith("DECRYPT.") && containsAtLeastTwoDotsRegex(decode)) {
+                        decodeConverter = new CodeConverter(decode.split("\\.")[2]);
+                    }
+                    columnMapper.setDecodeConverter(decodeConverter.decryptConverter(decode));
                 }
             }
             columnMappers.add(columnMapper);
@@ -361,8 +385,7 @@ public class MySinkWriterZipper extends AbstractSinkWriter<SeaTunnelRow, Void> {
         String queryTarget = this.jdbcDialect.getDataSqlZipper(this.jdbcSinkConfig, this.columnMappers, tableName);
         try (Connection conn1 = util.getConnection(jdbcSinkConfig); Connection conn2 =
                 util.getConnection(jdbcSinkConfig)) {
-            try (Statement stmt1 = conn1.createStatement(); Statement stmt2 = conn2.createStatement(); ResultSet rs1 =
-                    stmt1.executeQuery(querySource); ResultSet rs2 = stmt2.executeQuery(queryTarget)) {
+            try (Statement stmt1 = conn1.createStatement(); Statement stmt2 = conn2.createStatement(); ResultSet rs1 = stmt1.executeQuery(querySource); ResultSet rs2 = stmt2.executeQuery(queryTarget)) {
                 ResultSetMetaData md1 = rs1.getMetaData();
                 int columnCount = md1.getColumnCount();
                 StringBuilder sourceKey = new StringBuilder();

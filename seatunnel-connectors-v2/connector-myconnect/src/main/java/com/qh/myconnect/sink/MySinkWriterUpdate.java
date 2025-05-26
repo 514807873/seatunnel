@@ -5,6 +5,8 @@ import com.qh.myconnect.config.MidCount;
 import com.qh.myconnect.config.QualityFieldRule;
 import com.qh.myconnect.config.SubTaskStatus;
 import com.qh.myconnect.converter.CodeConverter;
+import com.qh.myconnect.dialect.ClickHouse.ClickHouseDialect;
+import com.qh.myconnect.dialect.trino.TrinoDialect;
 import com.xjgreat.quality.checker.common.check.RuleChecker;
 import com.xjgreat.quality.checker.common.check.SimpleRuleChecker;
 import org.apache.commons.lang3.StringUtils;
@@ -75,7 +77,6 @@ public class MySinkWriterUpdate extends AbstractSinkWriter<SeaTunnelRow, Void> {
 
     private final Set sqlErrorType = new HashSet();
     private final String tmpTable;
-    private CodeConverter converter = new CodeConverter();
     private Set<String> ignoreColumns = new HashSet<>();
 
     public MySinkWriterUpdate(SeaTunnelRowType seaTunnelRowType, Context context, ReadonlyConfig config, JobContext jobContext, LocalDateTime startTime) throws SQLException {
@@ -85,12 +86,6 @@ public class MySinkWriterUpdate extends AbstractSinkWriter<SeaTunnelRow, Void> {
         this.currentTaskId = context.getIndexOfSubtask();
         log.info("currentTaskId:" + this.currentTaskId);
         this.jdbcSinkConfig = JdbcSinkConfig.of(config);
-        if (jdbcSinkConfig.getDriver().equalsIgnoreCase("com.github.housepower.jdbc.ClickHouseDriver")) {
-            this.jdbcSinkConfig.setBatchSize(50000);
-        }
-        if (jdbcSinkConfig.getBatchSize() == 0) {
-            this.jdbcSinkConfig.setBatchSize(2000);
-        }
         this.tmpTable = "XJ$_" + this.jdbcSinkConfig.getTable();
         this.table = this.jdbcSinkConfig.getTable();
         this.preConfig = jdbcSinkConfig.getPreConfig();
@@ -103,7 +98,18 @@ public class MySinkWriterUpdate extends AbstractSinkWriter<SeaTunnelRow, Void> {
         this.startTime = startTime;
         this.jdbcDialect = JdbcDialectFactory.getJdbcDialect(this.jdbcSinkConfig.getDbType());
         this.conn = util.getConnection(this.jdbcSinkConfig);
-        this.conn.setAutoCommit(false);
+        if (jdbcDialect instanceof TrinoDialect) {
+            try (Statement statement = conn.createStatement()) {
+                String setSessionQuery = "SET SESSION hive.insert_existing_partitions_behavior = 'APPEND'";
+                statement.execute(setSessionQuery);
+                this.conn.setAutoCommit(true);
+            } catch (Exception e) {
+                throw new RuntimeException("Failed to set session", e);
+            }
+        }
+        else {
+            this.conn.setAutoCommit(false);
+        }
         this.sinkTableRowType = util.initTableField(conn, this.jdbcDialect, this.jdbcSinkConfig);
         this.initColumnMappers(this.jdbcSinkConfig, this.sourceRowType, this.sinkTableRowType, conn);
         String sqlQuery = jdbcDialect.getSinkQueryUpdate(this.columnMappers, 0, jdbcSinkConfig);
@@ -120,6 +126,12 @@ public class MySinkWriterUpdate extends AbstractSinkWriter<SeaTunnelRow, Void> {
 
     @Override
     public void write(SeaTunnelRow element) throws IOException {
+        List<ColumnMapper> needDecodeColumnMappers =
+                this.columnMappers.stream().filter(x -> x.getDecodeConverter() != null).collect(Collectors.toList());
+        for (ColumnMapper needDecodeColumnMapper : needDecodeColumnMappers) {
+            element.setField(needDecodeColumnMapper.getSourceRowPosition(),
+                    needDecodeColumnMapper.getDecodeConverter().apply(element.getField(needDecodeColumnMapper.getSourceRowPosition())));
+        }
         midCount.setWriteCount(midCount.getWriteCount() + 1);
         if (this.jdbcSinkConfig.isOpenQuality()) {
             List<QualityFieldRule> rules = this.jdbcSinkConfig.getQualityFieldRule();
@@ -164,37 +176,43 @@ public class MySinkWriterUpdate extends AbstractSinkWriter<SeaTunnelRow, Void> {
         String sql = null;
         try {
             List<String> columns = this.columnMappers.stream().map(ColumnMapper::getSinkColumnName).collect(Collectors.toList());
-            List<String> values = this.columnMappers.stream().map(x -> "?").collect(Collectors.toList());
+            List<String> values = this.columnMappers.stream().map(x -> x.getValueSupplier().get()).collect(Collectors.toList());
             sql = jdbcDialect.insertTmpTableSql(this.jdbcSinkConfig, columns, values);
-            PreparedStatement psUpsert = conn.prepareStatement(sql);
             boolean hasError = false;
-            for (SeaTunnelRow seaTunnelRow : this.cld) {
-                if (seaTunnelRow != null) {
-                    for (int i = 0; i < this.columnMappers.size(); i++) {
-                        Integer valueIndex = this.columnMappers.get(i).getSourceRowPosition();
-                        Object field = this.columnMappers.get(i).getConverter().apply(seaTunnelRow.getField(valueIndex));
-                        String column = columns.get(i);
-                        String dbType = metaDataHash.get(column);
-                        jdbcDialect.setPreparedStatementValueByDbType(i + 1, psUpsert, dbType, util.Object2String(field));
-                    }
-                    try {
-                        psUpsert.addBatch();
-                    } catch (SQLException e) {
-                        hasError = true;
-                        break;
+            try (PreparedStatement psUpsert = conn.prepareStatement(sql)) {
+                for (SeaTunnelRow seaTunnelRow : this.cld) {
+                    if (seaTunnelRow != null) {
+                        for (int i = 0; i < this.columnMappers.size(); i++) {
+                            Integer valueIndex = this.columnMappers.get(i).getSourceRowPosition();
+                            Object field = this.columnMappers.get(i).getConverter().apply(seaTunnelRow.getField(valueIndex));
+                            String column = columns.get(i);
+                            String dbType = metaDataHash.get(column);
+                            jdbcDialect.setPreparedStatementValueByDbType(i + 1, psUpsert, dbType, util.Object2String(field));
+                        }
+                        try {
+                            psUpsert.addBatch();
+                        } catch (SQLException e) {
+                            hasError = true;
+                            break;
+                        }
                     }
                 }
+                if (hasError) {
+                    throw new RuntimeException();
+                }
+                psUpsert.executeBatch();
+                conn.commit();
+                psUpsert.clearBatch();
             }
-            if (hasError) {
-                throw new RuntimeException();
-            }
-            psUpsert.executeBatch();
-            conn.commit();
-            psUpsert.clearBatch();
-            psUpsert.close();
-
         } catch (Exception e) {
-            log.error("错误sql:" + sql, ExceptionUtils.getStackTrace(e));
+            log.error("错误sql:" + sql);
+            String stackTrace = ExceptionUtils.getStackTrace(e);
+            if (StringUtils.isNotEmpty(stackTrace)) {
+                log.info("错误原因:" + stackTrace);
+            }
+            else {
+                log.info("错误原因:" + e.getMessage());
+            }
             try {
                 conn.rollback();
             } catch (SQLException ex) {
@@ -286,9 +304,25 @@ public class MySinkWriterUpdate extends AbstractSinkWriter<SeaTunnelRow, Void> {
                     conn.commit();
                 }
                 log.info("删除数据处理完毕");
-                log.info("开始对比数据");
-                compareTables(this.table);
-                log.info("数据对比完毕");
+                //开启不对比数据的 直接覆盖插入数据
+                if (preConfig.isDontCompare()) {
+                    if (StringUtils.isNoneBlank(this.jdbcSinkConfig.getDbSchema())) {
+                        this.jdbcDialect.deleteDataInUc(
+                                conn,
+                                this.jdbcSinkConfig.getDbSchema() + "." + table,
+                                this.jdbcSinkConfig.getDbSchema() + "." + tmpTable,
+                                ucColumns);
+                    }
+                    else {
+                        this.jdbcDialect.deleteDataInUc(conn, table, tmpTable, ucColumns);
+                    }
+
+                }
+                else {
+                    log.info("开始对比数据");
+                    compareTables(this.table);
+                    log.info("数据对比完毕");
+                }
                 //处理新增数据
                 log.info("处理新增数据");
                 {
@@ -301,6 +335,7 @@ public class MySinkWriterUpdate extends AbstractSinkWriter<SeaTunnelRow, Void> {
                     resultSet.next();
                     midCount.setInsertCount(resultSet.getLong(1));
                     String insertSql = this.jdbcDialect.insertData(jdbcSinkConfig, tmpTable, columns, ucs);
+                    log.info("插入数据执行的sql：" + insertSql);
                     conn.createStatement().execute(insertSql);
                     conn.commit();
                 }
@@ -333,48 +368,51 @@ public class MySinkWriterUpdate extends AbstractSinkWriter<SeaTunnelRow, Void> {
     private void insertToDbOneByOne() {
         try {
             List<String> columns = this.columnMappers.stream().map(ColumnMapper::getSinkColumnName).collect(Collectors.toList());
-            List<String> values = this.columnMappers.stream().map(x -> "?").collect(Collectors.toList());
+            List<String> values = this.columnMappers.stream().map(x -> x.getValueSupplier().get()).collect(Collectors.toList());
             String sql = jdbcDialect.insertTmpTableSql(this.jdbcSinkConfig, columns, values);
             for (SeaTunnelRow seaTunnelRow : this.cld) {
                 if (seaTunnelRow != null) {
-                    PreparedStatement psUpsert = conn.prepareStatement(sql);
-                    for (int i = 0; i < this.columnMappers.size(); i++) {
-                        Integer valueIndex = this.columnMappers.get(i).getSourceRowPosition();
-                        Object field = this.columnMappers.get(i).getConverter().apply(seaTunnelRow.getField(valueIndex));
-                        String column = columns.get(i);
-                        String dbType = metaDataHash.get(column);
-                        jdbcDialect.setPreparedStatementValueByDbType(i + 1, psUpsert, dbType, util.Object2String(field));
-                    }
-                    try {
-                        psUpsert.addBatch();
-                        psUpsert.executeBatch();
-                        conn.commit();
-                        psUpsert.clearBatch();
-                        psUpsert.close();
-                    } catch (SQLException ee) {
-                        midCount.setErrorCount(midCount.getErrorCount() + 1);
-                        if (this.jobContext.getIsRecordErrorData() == 1 && midCount.getErrorCount() <= this.jobContext.getMaxRecordNumber() && !sqlErrorType.contains(ee.getMessage())) {
-                            LinkedHashMap<String, Object> jsonObject = new LinkedHashMap<>();
-                            for (int i = 0; i < this.columnMappers.size(); i++) {
-                                jsonObject.put(this.columnMappers.get(i).getSourceColumnName(), seaTunnelRow.getField(i));
-                            }
-                            log.info(JSON.toJSONString(jsonObject, JSONWriter.Feature.WriteMapNullValue, JSONWriter.Feature.WriteNullListAsEmpty));
-                            SeaTunnelJobsHistoryErrorRecord errorRecord = new SeaTunnelJobsHistoryErrorRecord();
-                            errorRecord.setFlinkJobId(this.jobContext.getJobId());
-                            errorRecord.setDataSourceId(jdbcSinkConfig.getDbDatasourceId());
-                            errorRecord.setDbSchema(jdbcSinkConfig.getDbSchema());
-                            errorRecord.setTableName(jdbcSinkConfig.getTable());
-                            errorRecord.setErrorData(JSON.toJSONString(jsonObject, JSONWriter.Feature.WriteMapNullValue, JSONWriter.Feature.WriteNullListAsEmpty));
-                            errorRecord.setErrorMessage(ExceptionUtils.getStackTrace(ee));
-                            sqlErrorType.add(ee.getMessage());
-                            try {
-                                util.insertErrorData(errorRecord);
-                            } catch (Exception ex) {
-                                throw new RuntimeException(ex);
-                            }
+                    try (PreparedStatement psUpsert = conn.prepareStatement(sql)) {
+                        for (int i = 0; i < this.columnMappers.size(); i++) {
+                            Integer valueIndex = this.columnMappers.get(i).getSourceRowPosition();
+                            Object field = this.columnMappers.get(i).getConverter().apply(seaTunnelRow.getField(valueIndex));
+                            String column = columns.get(i);
+                            String dbType = metaDataHash.get(column);
+                            jdbcDialect.setPreparedStatementValueByDbType(i + 1, psUpsert, dbType, util.Object2String(field));
                         }
-                    } finally {
-                        conn.commit();
+                        try {
+                            psUpsert.addBatch();
+                            psUpsert.executeBatch();
+                            conn.commit();
+                            psUpsert.clearBatch();
+                            psUpsert.close();
+                        } catch (SQLException ee) {
+                            midCount.setErrorCount(midCount.getErrorCount() + 1);
+                            if (this.jobContext.getIsRecordErrorData() == 1 && midCount.getErrorCount() <= this.jobContext.getMaxRecordNumber() && !sqlErrorType.contains(ee.getMessage())) {
+                                LinkedHashMap<String, Object> jsonObject = new LinkedHashMap<>();
+                                for (int i = 0; i < this.columnMappers.size(); i++) {
+                                    jsonObject.put(this.columnMappers.get(i).getSourceColumnName(), seaTunnelRow.getField(i));
+                                }
+                                log.info("错误数据" + JSON.toJSONString(jsonObject, JSONWriter.Feature.WriteMapNullValue,
+                                        JSONWriter.Feature.WriteNullListAsEmpty));
+                                log.info("错误原因" + ee.getMessage());
+                                SeaTunnelJobsHistoryErrorRecord errorRecord = new SeaTunnelJobsHistoryErrorRecord();
+                                errorRecord.setFlinkJobId(this.jobContext.getJobId());
+                                errorRecord.setDataSourceId(jdbcSinkConfig.getDbDatasourceId());
+                                errorRecord.setDbSchema(jdbcSinkConfig.getDbSchema());
+                                errorRecord.setTableName(jdbcSinkConfig.getTable());
+                                errorRecord.setErrorData(JSON.toJSONString(jsonObject, JSONWriter.Feature.WriteMapNullValue, JSONWriter.Feature.WriteNullListAsEmpty));
+                                errorRecord.setErrorMessage(ExceptionUtils.getStackTrace(ee));
+                                sqlErrorType.add(ee.getMessage());
+                                try {
+                                    util.insertErrorData(errorRecord);
+                                } catch (Exception ex) {
+                                    throw new RuntimeException(ex);
+                                }
+                            }
+                        } finally {
+                            conn.commit();
+                        }
                     }
                 }
             }
@@ -392,12 +430,7 @@ public class MySinkWriterUpdate extends AbstractSinkWriter<SeaTunnelRow, Void> {
     private void initColumnMappers(JdbcSinkConfig jdbcSinkConfig, SeaTunnelRowType sourceRowType, SeaTunnelRowType sinkTableRowType, Connection conn) throws SQLException {
         Map<String, String> fieldMapper = jdbcSinkConfig.getFieldMapper();
         Map<String, String> codeMapper = jdbcSinkConfig.getCodeMapper();
-        if (codeMapper != null) {
-            Optional<String> any = codeMapper.values().stream().filter(x -> x.startsWith("ENCRYPT.") && containsAtLeastTwoDotsRegex(x)).findAny();
-            any.ifPresent(x -> {
-                converter = new CodeConverter(x.split("\\.")[2]);
-            });
-        }
+        Map<String, String> decodeMapper = jdbcSinkConfig.getDecodeMapper();
         Map<String, String> dmMap = new HashMap<>();
         List<String> allDms = new ArrayList<>();
         if (codeMapper != null) {
@@ -413,20 +446,28 @@ public class MySinkWriterUpdate extends AbstractSinkWriter<SeaTunnelRow, Void> {
                 }
             }
         }
-        converter.setDmMap(dmMap);
-        fieldMapper.forEach((k, v) -> {
+        fieldMapper.forEach((sourceColumnName, targetColumnName) -> {
+            CodeConverter converter = new CodeConverter();
+            if (codeMapper != null) {
+                String any = codeMapper.get(targetColumnName);
+                if (any != null) {
+                    if (any.startsWith("ENCRYPT.") && containsAtLeastTwoDotsRegex(any)) {
+                        converter = new CodeConverter(any.split("\\.")[2]);
+                    }
+                }
+            }
+            converter.setDmMap(dmMap);
             ColumnMapper columnMapper = new ColumnMapper();
-            columnMapper.setSourceColumnName(k);
-            columnMapper.setSourceRowPosition(sourceRowType.indexOf(k));
-            String typeNameSS = sourceRowType.getFieldType(sourceRowType.indexOf(k)).getTypeClass().getName();
-            columnMapper.setSourceColumnTypeName(typeNameSS);
-            columnMapper.setSinkColumnName(v);
-            columnMapper.setSinkRowPosition(sinkTableRowType.indexOf(v));
-            String typeNameSK = sinkTableRowType.getFieldType(sinkTableRowType.indexOf(v)).getTypeClass().getName();
+            columnMapper.setSourceColumnName(sourceColumnName);
+            columnMapper.setSourceRowPosition(sourceRowType.indexOf(sourceColumnName));
+            String typeName = sourceRowType.getFieldType(sourceRowType.indexOf(sourceColumnName)).getTypeClass().getName();
+            columnMapper.setSourceColumnTypeName(typeName);
+            columnMapper.setSinkColumnName(targetColumnName);
+            columnMapper.setSinkRowPosition(sinkTableRowType.indexOf(targetColumnName));
+            String typeNameSK = sinkTableRowType.getFieldType(sinkTableRowType.indexOf(targetColumnName)).getTypeClass().getName();
             columnMapper.setSinkColumnTypeName(typeNameSK);
-
             for (String primaryKey : jdbcSinkConfig.getPrimaryKeys()) {
-                if (primaryKey.equalsIgnoreCase(v)) {
+                if (primaryKey.equalsIgnoreCase(targetColumnName)) {
                     columnMapper.setUc(true);
                 }
             }
@@ -434,7 +475,7 @@ public class MySinkWriterUpdate extends AbstractSinkWriter<SeaTunnelRow, Void> {
                 ResultSetMetaData metaData = this.jdbcDialect.getResultSetMetaData(conn, jdbcSinkConfig);
                 for (int i = 0; i < metaData.getColumnCount(); i++) {
                     String columnName = metaData.getColumnName(i + 1);
-                    if (v.equalsIgnoreCase(columnName)) {
+                    if (targetColumnName.equalsIgnoreCase(columnName)) {
                         String columnTypeName = metaData.getColumnTypeName(i + 1);
                         columnMapper.setSinkColumnDbType(columnTypeName);
                     }
@@ -443,7 +484,7 @@ public class MySinkWriterUpdate extends AbstractSinkWriter<SeaTunnelRow, Void> {
                 throw new RuntimeException(e);
             }
             if (codeMapper != null) {
-                String safeCode = codeMapper.get(v);
+                String safeCode = codeMapper.get(targetColumnName);
                 if (safeCode != null && StringUtils.isNoneBlank(safeCode)) {
                     if (safeCode.startsWith("DM")) {
                         columnMapper.setConverter(converter.dmConverter(safeCode));
@@ -451,6 +492,21 @@ public class MySinkWriterUpdate extends AbstractSinkWriter<SeaTunnelRow, Void> {
                     else if (safeCode.startsWith("ENCRYPT")) {
                         columnMapper.setConverter(converter.encryptConverter(safeCode));
                     }
+                    else if (safeCode.startsWith("FUNCTION.")) {
+                        int dotIndex = safeCode.indexOf('.');
+                        String function = safeCode.substring(dotIndex + 1);
+                        columnMapper.setValueSupplier(() -> function.replace(":value", "?"));
+                    }
+                }
+            }
+            CodeConverter decodeConverter = new CodeConverter();
+            if (decodeMapper != null) {
+                String decode = decodeMapper.get(targetColumnName);
+                if (decode != null) {
+                    if (decode.startsWith("DECRYPT.") && containsAtLeastTwoDotsRegex(decode)) {
+                        decodeConverter = new CodeConverter(decode.split("\\.")[2]);
+                    }
+                    columnMapper.setDecodeConverter(decodeConverter.decryptConverter(decode));
                 }
             }
             columnMappers.add(columnMapper);

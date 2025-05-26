@@ -151,6 +151,12 @@
             <version>42.5.0</version>
         </dependency>
 
+        <dependency>
+            <groupId>com.dameng</groupId>
+            <artifactId>DmJdbcDriver18</artifactId>
+            <version>8.1.2.141</version>
+        </dependency>
+
 
         <dependency>
             <groupId>io.trino</groupId>

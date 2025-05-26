@@ -32,10 +32,12 @@ import com.qh.myconnect.dialect.JdbcDialectTypeMapper;
 
 import javax.annotation.Nullable;
 import java.sql.Connection;
+import java.sql.Date;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.ResultSetMetaData;
 import java.sql.SQLException;
+import java.sql.Timestamp;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
@@ -175,6 +177,29 @@ public class PostgresDialect implements JdbcDialect {
                 + String.format("(%s)", StringUtils.join(newColumns, ","))
                 + String.format("values (%s)", StringUtils.join(values, ","));
         return sql;
+    }
+
+    public void setPreparedStatementValueByDbType(
+            int position, PreparedStatement preparedStatement, String dbType, String value)
+            throws SQLException {
+        if (value == null || value.isEmpty()) {
+            preparedStatement.setObject(position, null);
+        }
+        else {
+            if (dbType.toLowerCase().contains("int")) {
+                preparedStatement.setInt(position, Integer.parseInt(value));
+            }
+            else if (dbType.toLowerCase().contains("timestamp")) {
+                preparedStatement.setTimestamp(position, Timestamp.valueOf(value));
+            }
+            else if(dbType.toLowerCase().contains("date")){
+                preparedStatement.setDate(position, Date.valueOf(value));
+            }
+            else {
+                preparedStatement.setString(position, value);
+            }
+        }
+
     }
 
     public String insertTmpTableSql(

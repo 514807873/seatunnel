@@ -15,21 +15,18 @@
  * limitations under the License.
  */
 
-package com.qh.myconnect.dialect.oracle;
-
-import com.qh.myconnect.config.PreConfig;
-import org.apache.seatunnel.common.exception.CommonErrorCode;
-
-import org.apache.commons.lang3.StringUtils;
-
-import org.stringtemplate.v4.ST;
+package com.qh.myconnect.dialect.dameng;
 
 import com.qh.myconnect.config.JdbcSinkConfig;
+import com.qh.myconnect.config.PreConfig;
 import com.qh.myconnect.converter.ColumnMapper;
 import com.qh.myconnect.converter.JdbcRowConverter;
 import com.qh.myconnect.dialect.JdbcConnectorException;
 import com.qh.myconnect.dialect.JdbcDialect;
 import com.qh.myconnect.dialect.JdbcDialectTypeMapper;
+import org.apache.commons.lang3.StringUtils;
+import org.apache.seatunnel.common.exception.CommonErrorCode;
+import org.stringtemplate.v4.ST;
 
 import javax.annotation.Nullable;
 import java.math.BigDecimal;
@@ -52,23 +49,23 @@ import java.util.stream.Collectors;
 
 import static java.lang.String.format;
 
-public class OracleDialect implements JdbcDialect {
+public class DaMengDialect implements JdbcDialect {
 
-    private static final int DEFAULT_ORACLE_FETCH_SIZE = 128;
+    private static final int DEFAULT_DAMENG_FETCH_SIZE = 128;
 
     @Override
     public String dialectName() {
-        return "Oracle";
+        return "DaMeng";
     }
 
     @Override
     public JdbcRowConverter getRowConverter() {
-        return new OracleJdbcRowConverter();
+        return new DaMengJdbcRowConverter();
     }
 
     @Override
     public JdbcDialectTypeMapper getJdbcDialectTypeMapper() {
-        return new OracleTypeMapper();
+        return new DaMengTypeMapper();
     }
 
     @Override
@@ -150,47 +147,49 @@ public class OracleDialect implements JdbcDialect {
             statement.setFetchSize(fetchSize);
         }
         else {
-            statement.setFetchSize(DEFAULT_ORACLE_FETCH_SIZE);
+            statement.setFetchSize(DEFAULT_DAMENG_FETCH_SIZE);
         }
         return statement;
     }
 
     @Override
     public void setPreparedStatementValueByDbType(
-            int position, PreparedStatement preparedStatement, String oracleType, String value)
+            int position, PreparedStatement preparedStatement, String DAMENGType, String value)
             throws SQLException {
         if (value == null) {
             preparedStatement.setObject(position, null);
         }
         else {
-            switch (oracleType) {
-                case OracleTypeMapper.ORACLE_INTEGER:
+            switch (DAMENGType) {
+                case DaMengTypeMapper.DAMENG_INTEGER:
                     preparedStatement.setInt(position, Integer.parseInt(value));
                     break;
-                case OracleTypeMapper.ORACLE_FLOAT:
+                case DaMengTypeMapper.DAMENG_FLOAT:
                     preparedStatement.setFloat(position, Float.parseFloat(value));
                     break;
-                case OracleTypeMapper.ORACLE_NUMBER:
+                case DaMengTypeMapper.DAMENG_NUMBER:
                     preparedStatement.setBigDecimal(position, new BigDecimal(value));
                     break;
-                case OracleTypeMapper.ORACLE_BINARY_DOUBLE:
+                case DaMengTypeMapper.DAMENG_BINARY_DOUBLE:
                     preparedStatement.setDouble(position, Double.parseDouble(value));
                     break;
-                case OracleTypeMapper.ORACLE_BINARY_FLOAT:
-                case OracleTypeMapper.ORACLE_REAL:
+                case DaMengTypeMapper.DAMENG_BINARY_FLOAT:
+                case DaMengTypeMapper.DAMENG_REAL:
                     preparedStatement.setFloat(position, Float.parseFloat(value));
                     break;
-                case OracleTypeMapper.ORACLE_CHAR:
-                case OracleTypeMapper.ORACLE_NCHAR:
-                case OracleTypeMapper.ORACLE_NVARCHAR2:
-                case OracleTypeMapper.ORACLE_VARCHAR2:
-                case OracleTypeMapper.ORACLE_LONG:
-                case OracleTypeMapper.ORACLE_ROWID:
-                case OracleTypeMapper.ORACLE_NCLOB:
-                case OracleTypeMapper.ORACLE_CLOB:
+                case DaMengTypeMapper.DAMENG_CHAR:
+                case DaMengTypeMapper.DAMENG_NCHAR:
+                case DaMengTypeMapper.DAMENG_NVARCHAR2:
+                case DaMengTypeMapper.DAMENG_VARCHAR2:
+                case DaMengTypeMapper.DAMENG_VARCHAR:
+                case DaMengTypeMapper.DAMENG_LONG:
+                case DaMengTypeMapper.DAMENG_ROWID:
+                case DaMengTypeMapper.DAMENG_NCLOB:
+                case DaMengTypeMapper.DAMENG_CLOB:
+                case DaMengTypeMapper.DAMENG_TEXT:
                     preparedStatement.setString(position, value);
                     break;
-                case OracleTypeMapper.ORACLE_DATE:
+                case DaMengTypeMapper.DAMENG_DATE:
                     SimpleDateFormat df = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
                     try {
                         java.util.Date date = df.parse(value);
@@ -199,8 +198,8 @@ public class OracleDialect implements JdbcDialect {
                         e.printStackTrace();
                     }
                     break;
-                case OracleTypeMapper.ORACLE_TIMESTAMP:
-                case OracleTypeMapper.ORACLE_TIMESTAMP_WITH_LOCAL_TIME_ZONE:
+                case DaMengTypeMapper.DAMENG_TIMESTAMP:
+                case DaMengTypeMapper.DAMENG_TIMESTAMP_WITH_LOCAL_TIME_ZONE:
                     SimpleDateFormat df1 = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
                     try {
                         java.util.Date date = df1.parse(value);
@@ -210,20 +209,20 @@ public class OracleDialect implements JdbcDialect {
                         e.printStackTrace();
                     }
                     break;
-                case OracleTypeMapper.ORACLE_BLOB:
-                case OracleTypeMapper.ORACLE_RAW:
-                case OracleTypeMapper.ORACLE_LONG_RAW:
-                case OracleTypeMapper.ORACLE_BFILE:
+                case DaMengTypeMapper.DAMENG_BLOB:
+                case DaMengTypeMapper.DAMENG_RAW:
+                case DaMengTypeMapper.DAMENG_LONG_RAW:
+                case DaMengTypeMapper.DAMENG_BFILE:
                     preparedStatement.setBytes(position, value.getBytes());
                     break;
                 // Doesn't support yet
-                case OracleTypeMapper.ORACLE_UNKNOWN:
+                case DaMengTypeMapper.DAMENG_UNKNOWN:
                 default:
                     throw new JdbcConnectorException(
                             CommonErrorCode.CONVERT_TO_SEATUNNEL_TYPE_ERROR,
                             String.format(
-                                    "Doesn't support ORACLE type '%s' on column '%s'  yet.",
-                                    oracleType, oracleType));
+                                    "Doesn't support DAMENG type '%s' on column '%s'  yet.",
+                                    DAMENGType, DAMENGType));
             }
         }
     }
@@ -386,16 +385,10 @@ public class OracleDialect implements JdbcDialect {
         return String.format(
                 "truncate  table %s.%s", jdbcSinkConfig.getDbSchema(), jdbcSinkConfig.getTable());
     }
-    public String truncateTable(JdbcSinkConfig jdbcSinkConfig,String tableName) {
-        return String.format(
-                "truncate  table %s.%s", jdbcSinkConfig.getDbSchema(), tableName);
-    }
 
     public String dropTable(JdbcSinkConfig jdbcSinkConfig, String tableName) {
         return String.format("drop table  \"%s\".\"%s\"", jdbcSinkConfig.getDbSchema(), tableName);
     }
-
-
 
     public String createIndex(String tmpTableName, JdbcSinkConfig jdbcSinkConfig) {
         List<String> collect =
