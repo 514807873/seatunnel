@@ -2,6 +2,7 @@ package com.qh.myconnect.converter;
 
 import cn.hutool.core.util.HexUtil;
 import cn.hutool.core.util.StrUtil;
+import cn.hutool.crypto.BCUtil;
 import cn.hutool.crypto.SmUtil;
 import cn.hutool.crypto.asymmetric.KeyType;
 import cn.hutool.crypto.asymmetric.SM2;
@@ -11,6 +12,7 @@ import cn.hutool.crypto.symmetric.SM4;
 import com.qh.myconnect.config.JybSm4Util;
 import com.qh.myconnect.config.Util;
 import lombok.Data;
+
 import java.nio.charset.StandardCharsets;
 import java.sql.Connection;
 import java.sql.ResultSet;
@@ -44,8 +46,9 @@ public class CodeConverter {
         this.sm4 = new SM4(key);
     }
 
-    public CodeConverter(String encryptKeyId) {
-        List<String> encipherWay = List.of("SM4加密(教育部大数据中心)", "SM4加密", "SM3加密", "SM2加密", "AES加密", "MD5加密");
+    public CodeConverter(String columnName, String encryptKeyId) {
+        boolean isUserInterFaceEtL = false;
+        List<String> encipherWay = List.of("SM4加密(教育部大数据中心)", "SM4加密", "SM3加密", "SM2加密", "AES加密", "MD5加密", "SM4", "SM3", "SM2", "AES", "MD5");
         Util util = new Util();
         String encipherName = null;
         String publicKey = null;
@@ -69,7 +72,39 @@ public class CodeConverter {
                 privateKey = rs.getString("key_private");
             }
             else {
-                throw new RuntimeException("秘钥配置有误,请检查");
+                // 校验是不是用户端etl 根据密钥 id 是不是在 secure_encipher_manage_id里面有值来判断
+                String sql2 = String.format("SELECT "
+                                            + " a.id,"
+                                            + " a.encipher_way "
+                                            + "FROM "
+                                            + " pangu.seatunnel_table_encrypt a "
+                                            + "WHERE "
+                                            + " a.key_id = '%s' and columnName='%s'", encryptKeyId,
+                        columnName);
+                ResultSet rs2 = stmt.executeQuery(sql2);
+                if (rs2.next()) {
+                    isUserInterFaceEtL = true;
+                    encipherName = rs2.getString("encipher_way");
+                    if (encipherName.equalsIgnoreCase("SM2")) {
+                        privateKey = "55d5a83daeacfcebd2c21e61690ae9c30a2fb887793109fe2fd13afade11dfc8";
+                        publicKey = "8f7c9b235ce19bc14a94c6affa2592d74e69978123620cb0c06d3edfe87fd37aa0683beb4db1433e218a043a1d0fab670bb758afaae996370b32d68e95b1b805";
+                        new SM2(BCUtil.toSm2Params(privateKey), BCUtil.toSm2Params(publicKey.substring(0, 64),
+                                publicKey.substring(64, 128)));
+                    }
+                    else {
+                        String sql3 = String.format("select  app_secret from houyi_catalogue.fdc_campus_apps where "
+                                                    + "id='%s'", encryptKeyId);
+                        ResultSet rs3 = stmt.executeQuery(sql3);
+                        if (rs3.next()) {
+                            privateKey = null;
+                            publicKey = rs3.getString("app_secret");
+
+                        }
+                    }
+                }
+                else {
+                    throw new RuntimeException("秘钥配置有误,请检查");
+                }
             }
 
         } catch (SQLException e) {
@@ -87,16 +122,21 @@ public class CodeConverter {
         if (encipherName.equalsIgnoreCase("SM4加密(教育部大数据中心)")) {
             sm4Util = new JybSm4Util(publicKey);
         }
-        else if (encipherName.equalsIgnoreCase("SM4加密")) {
+        else if (encipherName.equalsIgnoreCase("SM4加密") || encipherName.equalsIgnoreCase("SM4")) {
             byte[] key = publicKey.substring(0, 16).getBytes();
             this.sm4 = new SM4(key);
         }
-        else if (encipherName.equalsIgnoreCase("SM2加密")) {
+        else if (encipherName.equalsIgnoreCase("SM2加密") || encipherName.equalsIgnoreCase("SM2")) {
             byte[] privateKeyByte = HexUtil.decodeHex(privateKey);
             byte[] publicKeyByte = HexUtil.decodeHex(publicKey);
-            this.sm2 = SmUtil.sm2(privateKeyByte, publicKeyByte);
+            if (isUserInterFaceEtL) {
+                this.sm2 = new SM2(BCUtil.toSm2Params(privateKey), BCUtil.toSm2Params(publicKey.substring(0, 64), publicKey.substring(64, 128)));
+            }
+            else {
+                this.sm2 = SmUtil.sm2(privateKeyByte, publicKeyByte);
+            }
         }
-        else if (encipherName.equalsIgnoreCase("AES加密")) {
+        else if (encipherName.equalsIgnoreCase("AES加密") || encipherName.equalsIgnoreCase("AES")) {
             byte[] key = encryptKeyId.substring(0, 16).getBytes();
             this.aes = new AES(key);
         }

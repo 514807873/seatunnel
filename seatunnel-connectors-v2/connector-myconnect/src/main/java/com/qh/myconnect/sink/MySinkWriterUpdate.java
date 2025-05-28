@@ -452,7 +452,7 @@ public class MySinkWriterUpdate extends AbstractSinkWriter<SeaTunnelRow, Void> {
                 String any = codeMapper.get(targetColumnName);
                 if (any != null) {
                     if (any.startsWith("ENCRYPT.") && containsAtLeastTwoDotsRegex(any)) {
-                        converter = new CodeConverter(any.split("\\.")[2]);
+                        converter = new CodeConverter(targetColumnName,any.split("\\.")[2]);
                     }
                 }
             }
@@ -504,7 +504,7 @@ public class MySinkWriterUpdate extends AbstractSinkWriter<SeaTunnelRow, Void> {
                 String decode = decodeMapper.get(targetColumnName);
                 if (decode != null) {
                     if (decode.startsWith("DECRYPT.") && containsAtLeastTwoDotsRegex(decode)) {
-                        decodeConverter = new CodeConverter(decode.split("\\.")[2]);
+                        decodeConverter = new CodeConverter(targetColumnName,decode.split("\\.")[2]);
                     }
                     columnMapper.setDecodeConverter(decodeConverter.decryptConverter(decode));
                 }
