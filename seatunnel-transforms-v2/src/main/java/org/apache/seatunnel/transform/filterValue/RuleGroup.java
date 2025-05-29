@@ -6,8 +6,9 @@ import java.io.Serializable;
 import java.util.List;
 
 @Data
-public class Rule implements Serializable {
-    private String name;
-    private String value;
-    private String operator;
+public class RuleGroup implements Serializable {
+    private String logicalOperator;
+    private List<Object> rules;
 }
+
+

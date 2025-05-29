@@ -29,10 +29,9 @@ import java.util.Map;
 @Getter
 @Setter
 public class FilterValueTransformConfig implements Serializable {
-    public static final Option<List<Rule>> FIELDS =
+    public static final Option<RuleGroup> FIELDS =
             Options.key("fields")
-                    .listType(Rule.class)
+                    .objectType(RuleGroup.class)
                     .noDefaultValue()
-                    .withDescription(
-                            "规则列表");
+                    .withDescription("过滤规则组，支持嵌套逻辑");
 }

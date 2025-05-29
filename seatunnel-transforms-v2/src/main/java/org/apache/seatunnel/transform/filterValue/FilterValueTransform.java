@@ -49,11 +49,7 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
-import java.util.Enumeration;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Properties;
+import java.util.*;
 import java.util.stream.Collectors;
 
 import static com.google.common.base.Preconditions.checkNotNull;
@@ -63,7 +59,7 @@ import static org.apache.seatunnel.transform.filterValue.FilterValueRuleEnum.app
 public class FilterValueTransform extends AbstractCatalogSupportTransform {
     public static final String PLUGIN_NAME = "FilterValue";
     private Map<String, Integer> columnIndex;
-    private final List<Rule> rules;
+    private final RuleGroup ruleGroup;
     private final ObjectMapper objectMapper = new ObjectMapper();
     private final TimeUtils.Formatter timeFormatter = TimeUtils.Formatter.HH_MM_SS;
     private final DateUtils.Formatter dateFormatter = DateUtils.Formatter.YYYY_MM_DD;
@@ -78,18 +74,36 @@ public class FilterValueTransform extends AbstractCatalogSupportTransform {
             @NonNull ReadonlyConfig config, @NonNull CatalogTable catalogTable) {
         super(catalogTable);
         seaTunnelRowType = catalogTable.getTableSchema().toPhysicalRowDataType();
-        rules = config.get(FilterValueTransformConfig.FIELDS);
-        List<String> canNotFoundFields =
-                rules.stream()
-                        .map(Rule::getName)
-                        .filter(name -> seaTunnelRowType.indexOf(name, false) == -1)
-                        .collect(Collectors.toList());
+        RuleGroup ruleGroup = config.get(FilterValueTransformConfig.FIELDS);
+
+        // 收集所有规则中的字段名
+        List<String> fieldNames = collectAllFieldNames(ruleGroup);
+
+        // 检查字段是否存在
+        List<String> canNotFoundFields = fieldNames.stream()
+                .filter(name -> seaTunnelRowType.indexOf(name, false) == -1)
+                .distinct()
+                .collect(Collectors.toList());
+
         if (!CollectionUtils.isEmpty(canNotFoundFields)) {
             throw TransformCommonError.cannotFindInputFieldsError(
                     getPluginName(), canNotFoundFields);
         }
 
+        this.ruleGroup = ruleGroup;
+    }
 
+    // 递归收集所有规则中的字段名
+    private List<String> collectAllFieldNames(RuleGroup ruleGroup) {
+        List<String> fieldNames = new ArrayList<>();
+        for (Object rule : ruleGroup.getRules()) {
+            if (rule instanceof Rule) {
+                fieldNames.add(((Rule) rule).getName());
+            } else if (rule instanceof RuleGroup) {
+                fieldNames.addAll(collectAllFieldNames((RuleGroup) rule));
+            }
+        }
+        return fieldNames;
     }
 
     @Override
@@ -99,7 +113,7 @@ public class FilterValueTransform extends AbstractCatalogSupportTransform {
 
     @Override
     protected SeaTunnelRow transformRow(SeaTunnelRow inputRow) {
-        Boolean ruleResult = applyRules(rules, inputRow, columnIndex);
+        Boolean ruleResult = applyRules(ruleGroup, inputRow, columnIndex);
         // I类型数据 校验通不过 不往下游推
         if (inputRow.getRowKind().equals(RowKind.INSERT) && !ruleResult) {
             return null;
@@ -211,13 +225,37 @@ public class FilterValueTransform extends AbstractCatalogSupportTransform {
     @Override
     protected TableSchema transformTableSchema() {
         columnIndex = new HashMap<>();
-        SeaTunnelRowType seaTunnelRowType =
-                inputCatalogTable.getTableSchema().toPhysicalRowDataType();
-        for (Rule field : rules) {
-            int inputFieldIndex = seaTunnelRowType.indexOf(field.getName());
-            columnIndex.put(field.getName(), inputFieldIndex);
-        }
+        SeaTunnelRowType seaTunnelRowType = inputCatalogTable.getTableSchema().toPhysicalRowDataType();
+
+        // 递归处理规则组中的所有规则
+        processRules(ruleGroup, seaTunnelRowType);
+
         return inputCatalogTable.getTableSchema();
+    }
+
+    // 递归处理方法
+    private void processRules(RuleGroup ruleGroup, SeaTunnelRowType seaTunnelRowType) {
+        for (Object ruleObj : ruleGroup.getRules()) {
+            ObjectMapper objectMapper = new ObjectMapper();
+            if (ruleObj instanceof Map) {
+                Map<?, ?> map = (Map<?, ?>) ruleObj;
+                if (map.containsKey("logicalOperator") && map.containsKey("rules")) {
+                    // 是个条件组  是个RuleGroup
+                    RuleGroup subGroup = objectMapper.convertValue(map, RuleGroup.class);
+                    // 递归处理子规则组
+                    processRules( subGroup, seaTunnelRowType);
+                } else if (map.containsKey("name") && map.containsKey("operator") && map.containsKey("value")) {
+                    // 是条件 Rule
+                    Rule rule = objectMapper.convertValue(map, Rule.class);
+                    int inputFieldIndex = seaTunnelRowType.indexOf(rule.getName());
+                    columnIndex.put(rule.getName(), inputFieldIndex);
+                } else {
+                    throw new IllegalArgumentException("Unknown rule structure: " + map);
+                }
+            } else {
+                throw new IllegalArgumentException("Unknown rule type: " + ruleObj.getClass());
+            }
+        }
     }
 
     @Override
