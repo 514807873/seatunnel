@@ -137,7 +137,8 @@ public class CodeConverter {
             }
         }
         else if (encipherName.equalsIgnoreCase("AES加密") || encipherName.equalsIgnoreCase("AES")) {
-            byte[] key = encryptKeyId.substring(0, 16).getBytes();
+            assert publicKey != null;
+            byte[] key = publicKey.substring(0, 16).getBytes();
             this.aes = new AES(key);
         }
 
@@ -202,7 +203,11 @@ public class CodeConverter {
         return str -> {
             if (safeCode.startsWith("DECRYPT.AES")) {
                 if (str == null) return null;
-                return aes.decryptStr(String.valueOf(str).getBytes());
+                try {
+                    return new String(aes.decrypt(HexUtil.decodeHex((String) str)));
+                } catch (Exception e) {
+                    throw new RuntimeException("解密错误,请检查秘钥配置",e);
+                }
             }
             if (safeCode.startsWith("DECRYPT.SM2")) {
                 if (str == null) return null;
@@ -214,7 +219,11 @@ public class CodeConverter {
                  *         String decryptStr2 = StrUtil.utf8Str(sm2.decryptFromBcd("041D73D83BCABC68CEEBD95954911375EB5962DF8928ADA906F7A6CB2005AC2C0C8349CA7E37BEA0ED68B15207A63CB5595F44B82F788513BF8BBFD255EFFCEA53C1FD201F813B858186D43CAF5A6C3A7D068FDB5C6100DB9C0152B886607AB50D2BA796E9A54F8B9854", KeyType.PrivateKey));
                  *         System.out.println(decryptStr2);
                  */
-                return StrUtil.utf8Str(sm2.decryptFromBcd(String.valueOf(str), KeyType.PrivateKey));
+                try {
+                    return StrUtil.utf8Str(sm2.decryptFromBcd(String.valueOf(str), KeyType.PrivateKey));
+                } catch (Exception e) {
+                    throw new RuntimeException("解密错误,请检查秘钥配置",e);
+                }
             }
             if (safeCode.startsWith("DECRYPT.SM4")) {
                 if (str == null) return null;
@@ -222,11 +231,16 @@ public class CodeConverter {
                     try {
                         return sm4Util.decryptEcb(String.valueOf(str));
                     } catch (Exception e) {
-                        throw new RuntimeException("解密错误", e);
+                        throw new RuntimeException("解密错误,请检查秘钥配置", e);
                     }
                 }
                 else {
-                    byte[] decrypt = sm4.decrypt(String.valueOf(str));
+                    byte[] decrypt = new byte[0];
+                    try {
+                        decrypt = sm4.decrypt(String.valueOf(str));
+                    } catch (Exception e) {
+                        throw new RuntimeException("解密错误,请检查秘钥配置",e);
+                    }
                     return new String(decrypt, StandardCharsets.UTF_8);
                 }
             }
