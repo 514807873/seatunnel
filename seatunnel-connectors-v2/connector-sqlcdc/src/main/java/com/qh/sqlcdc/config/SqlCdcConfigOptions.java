@@ -20,6 +20,7 @@ package com.qh.sqlcdc.config;
 import org.apache.seatunnel.api.configuration.Option;
 import org.apache.seatunnel.api.configuration.Options;
 
+import java.util.ArrayList;
 import java.util.List;
 
 public class SqlCdcConfigOptions {
@@ -42,6 +43,15 @@ public class SqlCdcConfigOptions {
 
     public static final Option<String> PASSWORD =
             Options.key("password").stringType().noDefaultValue().withDescription("password");
+
+    public static final Option<Boolean> openDelete =
+            Options.key("openDelete")
+                    .booleanType()
+                    .defaultValue(false).withDescription("openDelete");
+    public static final Option<List<String>> PRIMARY_KEYS =
+            Options.key("primary_keys")
+                    .listType().defaultValue(new ArrayList<String>()
+            ).withDescription("primary keys");
 
 //    public static Option<List<String>> PRIMARY_KEYS =
 //            Options.key("primary_keys").listType().noDefaultValue().withDescription("primary keys");

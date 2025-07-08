@@ -73,6 +73,15 @@ public class ClickHouseMapper implements JdbcDialectTypeMapper {
     private static final String CLICKHOUSE_INT64_NULLABLE = "NULLABLE(INT64)";
     private static final String CLICKHOUSE_INT128_NULLABLE = "NULLABLE(INT128)";
 
+
+    private static final String CLICKHOUSE_UINT_NULLABLE = "NULLABLE(UINT)";
+    private static final String CLICKHOUSE_UINT8_NULLABLE = "NULLABLE(UINT8)";
+    private static final String CLICKHOUSE_UINT16_NULLABLE = "NULLABLE(UINT16)";
+    private static final String CLICKHOUSE_UINT32_NULLABLE = "NULLABLE(UINT32)";
+    private static final String CLICKHOUSE_UINT64_NULLABLE = "NULLABLE(UINT64)";
+    private static final String CLICKHOUSE_UINT128_NULLABLE = "NULLABLE(UINT128)";
+
+
     private static final String CLICKHOUSE_FLOAT64_NULLABLE = "NULLABLE(FLOAT64)";
     private static final String CLICKHOUSE_FLOAT32_NULLABLE = "NULLABLE(FLOAT32)";
 
@@ -156,6 +165,12 @@ public class ClickHouseMapper implements JdbcDialectTypeMapper {
             case CLICKHOUSE_INT128_NULLABLE:
             case CLICKHOUSE_INTEGER:
             case CLICKHOUSE_YEAR:
+            case CLICKHOUSE_UINT_NULLABLE:
+            case CLICKHOUSE_UINT8_NULLABLE:
+            case CLICKHOUSE_UINT16_NULLABLE:
+            case CLICKHOUSE_UINT32_NULLABLE:
+            case CLICKHOUSE_UINT64_NULLABLE:
+            case CLICKHOUSE_UINT128_NULLABLE:
                 return BasicType.INT_TYPE;
             case CLICKHOUSE_INT_UNSIGNED:
             case CLICKHOUSE_INTEGER_UNSIGNED:

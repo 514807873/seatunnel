@@ -39,10 +39,9 @@ public class CodeConverter {
     public CodeConverter() {
         byte[] key = "pangu123pangu123".getBytes();
         this.aes = new AES(key);
-        byte[] privateKey = HexUtil.decodeHex("308193020100301306072a8648ce3d020106082a811ccf5501822d0479307702010104203192b1f7b849bcaef11e682b09d4d719f30b5ba43f2be6f81ac289ee2e50f9b8a00a06082a811ccf5501822da144034200041122423fd69fb39e8cb09d0269cdda139513f22c080eacda9158047ac8c6f3bd1193c01fa81dd3896c01ac9a554c4d9feacb9a80677bc493363c8b9e83f42f99");
-        byte[] publicKey = HexUtil.decodeHex(
-                "3059301306072a8648ce3d020106082a811ccf5501822d034200041122423fd69fb39e8cb09d0269cdda139513f22c080eacda9158047ac8c6f3bd1193c01fa81dd3896c01ac9a554c4d9feacb9a80677bc493363c8b9e83f42f99");
-        this.sm2 = SmUtil.sm2(privateKey, publicKey);
+        String privateKey = "55d5a83daeacfcebd2c21e61690ae9c30a2fb887793109fe2fd13afade11dfc8";
+        String publicKey = "8f7c9b235ce19bc14a94c6affa2592d74e69978123620cb0c06d3edfe87fd37aa0683beb4db1433e218a043a1d0fab670bb758afaae996370b32d68e95b1b805";
+        this.sm2 = SmUtil.sm2(BCUtil.toSm2Params(privateKey), BCUtil.toSm2Params(publicKey.substring(0, 64), publicKey.substring(64, 128)));
         this.sm4 = new SM4(key);
     }
 
@@ -127,29 +126,13 @@ public class CodeConverter {
             this.sm4 = new SM4(key);
         }
         else if (encipherName.equalsIgnoreCase("SM2加密") || encipherName.equalsIgnoreCase("SM2")) {
-            byte[] privateKeyByte = HexUtil.decodeHex(privateKey);
-            byte[] publicKeyByte = HexUtil.decodeHex(publicKey);
-            if (isUserInterFaceEtL) {
-                this.sm2 = new SM2(BCUtil.toSm2Params(privateKey), BCUtil.toSm2Params(publicKey.substring(0, 64), publicKey.substring(64, 128)));
-            }
-            else {
-                this.sm2 = SmUtil.sm2(privateKeyByte, publicKeyByte);
-            }
+            this.sm2 = new SM2(BCUtil.toSm2Params(privateKey), BCUtil.toSm2Params(publicKey.substring(0, 64), publicKey.substring(64, 128)));
         }
         else if (encipherName.equalsIgnoreCase("AES加密") || encipherName.equalsIgnoreCase("AES")) {
             assert publicKey != null;
             byte[] key = publicKey.substring(0, 16).getBytes();
             this.aes = new AES(key);
         }
-
-
-//        byte[] key = encryptKeyId.substring(0, 16).getBytes();
-//        this.aes = new AES(key);
-//        byte[] privateKey = HexUtil.decodeHex("308193020100301306072a8648ce3d020106082a811ccf5501822d0479307702010104203192b1f7b849bcaef11e682b09d4d719f30b5ba43f2be6f81ac289ee2e50f9b8a00a06082a811ccf5501822da144034200041122423fd69fb39e8cb09d0269cdda139513f22c080eacda9158047ac8c6f3bd1193c01fa81dd3896c01ac9a554c4d9feacb9a80677bc493363c8b9e83f42f99");
-//        byte[] publicKey = HexUtil.decodeHex(
-//                "3059301306072a8648ce3d020106082a811ccf5501822d034200041122423fd69fb39e8cb09d0269cdda139513f22c080eacda9158047ac8c6f3bd1193c01fa81dd3896c01ac9a554c4d9feacb9a80677bc493363c8b9e83f42f99");
-//        this.sm2 = SmUtil.sm2(privateKey, publicKey);
-//        this.sm4 = new SM4(key);
     }
 
     public Function<Object, Object> encryptConverter(String safeCode) {
@@ -168,15 +151,7 @@ public class CodeConverter {
             }
             if (safeCode.startsWith("ENCRYPT.SM2")) {
                 if (str == null) return null;
-                return sm2.encryptBcd(String.valueOf(str), KeyType.PublicKey);
-                /* 解密方法
-                 *         byte[] privateKey = HexUtil.decodeHex("308193020100301306072a8648ce3d020106082a811ccf5501822d0479307702010104203192b1f7b849bcaef11e682b09d4d719f30b5ba43f2be6f81ac289ee2e50f9b8a00a06082a811ccf5501822da144034200041122423fd69fb39e8cb09d0269cdda139513f22c080eacda9158047ac8c6f3bd1193c01fa81dd3896c01ac9a554c4d9feacb9a80677bc493363c8b9e83f42f99");
-                 *         byte[] publicKey = HexUtil.decodeHex(
-                 *                 "3059301306072a8648ce3d020106082a811ccf5501822d034200041122423fd69fb39e8cb09d0269cdda139513f22c080eacda9158047ac8c6f3bd1193c01fa81dd3896c01ac9a554c4d9feacb9a80677bc493363c8b9e83f42f99");
-                 *         SM2 sm2 = SmUtil.sm2(privateKey, publicKey);
-                 *         String decryptStr2 = StrUtil.utf8Str(sm2.decryptFromBcd("041D73D83BCABC68CEEBD95954911375EB5962DF8928ADA906F7A6CB2005AC2C0C8349CA7E37BEA0ED68B15207A63CB5595F44B82F788513BF8BBFD255EFFCEA53C1FD201F813B858186D43CAF5A6C3A7D068FDB5C6100DB9C0152B886607AB50D2BA796E9A54F8B9854", KeyType.PrivateKey));
-                 *         System.out.println(decryptStr2);
-                 */
+                return HexUtil.encodeHexStr(sm2.encrypt(String.valueOf(str).getBytes(StandardCharsets.UTF_8), KeyType.PublicKey));
             }
             if (safeCode.startsWith("ENCRYPT.SM3")) {
                 if (str == null) return null;
@@ -206,23 +181,15 @@ public class CodeConverter {
                 try {
                     return new String(aes.decrypt(HexUtil.decodeHex((String) str)));
                 } catch (Exception e) {
-                    throw new RuntimeException("解密错误,请检查秘钥配置",e);
+                    throw new RuntimeException("解密错误,请检查秘钥配置", e);
                 }
             }
             if (safeCode.startsWith("DECRYPT.SM2")) {
                 if (str == null) return null;
-                /* 解密方法
-                 *         byte[] privateKey = HexUtil.decodeHex("308193020100301306072a8648ce3d020106082a811ccf5501822d0479307702010104203192b1f7b849bcaef11e682b09d4d719f30b5ba43f2be6f81ac289ee2e50f9b8a00a06082a811ccf5501822da144034200041122423fd69fb39e8cb09d0269cdda139513f22c080eacda9158047ac8c6f3bd1193c01fa81dd3896c01ac9a554c4d9feacb9a80677bc493363c8b9e83f42f99");
-                 *         byte[] publicKey = HexUtil.decodeHex(
-                 *                 "3059301306072a8648ce3d020106082a811ccf5501822d034200041122423fd69fb39e8cb09d0269cdda139513f22c080eacda9158047ac8c6f3bd1193c01fa81dd3896c01ac9a554c4d9feacb9a80677bc493363c8b9e83f42f99");
-                 *         SM2 sm2 = SmUtil.sm2(privateKey, publicKey);
-                 *         String decryptStr2 = StrUtil.utf8Str(sm2.decryptFromBcd("041D73D83BCABC68CEEBD95954911375EB5962DF8928ADA906F7A6CB2005AC2C0C8349CA7E37BEA0ED68B15207A63CB5595F44B82F788513BF8BBFD255EFFCEA53C1FD201F813B858186D43CAF5A6C3A7D068FDB5C6100DB9C0152B886607AB50D2BA796E9A54F8B9854", KeyType.PrivateKey));
-                 *         System.out.println(decryptStr2);
-                 */
                 try {
-                    return StrUtil.utf8Str(sm2.decryptFromBcd(String.valueOf(str), KeyType.PrivateKey));
+                    return new String(sm2.decrypt(HexUtil.decodeHex(String.valueOf(str)), KeyType.PrivateKey),  StandardCharsets.UTF_8);
                 } catch (Exception e) {
-                    throw new RuntimeException("解密错误,请检查秘钥配置",e);
+                    throw new RuntimeException("解密错误,请检查秘钥配置", e);
                 }
             }
             if (safeCode.startsWith("DECRYPT.SM4")) {
@@ -239,12 +206,12 @@ public class CodeConverter {
                     try {
                         decrypt = sm4.decrypt(String.valueOf(str));
                     } catch (Exception e) {
-                        throw new RuntimeException("解密错误,请检查秘钥配置",e);
+                        throw new RuntimeException("解密错误,请检查秘钥配置", e);
                     }
                     return new String(decrypt, StandardCharsets.UTF_8);
                 }
             }
-            return safeCode + '.' + str;
+            return str;
         };
     }
 

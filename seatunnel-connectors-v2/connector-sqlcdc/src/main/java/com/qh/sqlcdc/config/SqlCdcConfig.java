@@ -17,6 +17,7 @@
 
 package com.qh.sqlcdc.config;
 
+import org.apache.seatunnel.api.table.catalog.PrimaryKey;
 import org.apache.seatunnel.shade.com.typesafe.config.Config;
 
 import lombok.Data;
@@ -32,7 +33,8 @@ public class SqlCdcConfig implements Serializable {
     private String user;
     private String passWord;
     private String dbType;
-
+    private Boolean openDelete;
+    private List<String> primaryKeys;
     public SqlCdcConfig(Config config) {
         this.driver = config.getString(SqlCdcConfigOptions.DRIVER.key());
         this.query = config.getString(SqlCdcConfigOptions.QUERY.key());
@@ -40,5 +42,7 @@ public class SqlCdcConfig implements Serializable {
         this.user = config.getString(SqlCdcConfigOptions.USER.key());
         this.passWord = config.getString(SqlCdcConfigOptions.PASSWORD.key());
         this.dbType = config.getString(SqlCdcConfigOptions.DBTYPE.key());
+        this.openDelete  = config.getBoolean(SqlCdcConfigOptions.openDelete.key());
+        this.primaryKeys = config.getStringList(SqlCdcConfigOptions.PRIMARY_KEYS.key());
     }
 }

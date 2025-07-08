@@ -30,6 +30,7 @@ import lombok.NonNull;
 
 import java.io.File;
 import java.io.Serializable;
+import java.net.MalformedURLException;
 import java.net.URL;
 import java.net.URLClassLoader;
 import java.sql.Connection;
@@ -80,6 +81,17 @@ public class SimpleJdbcConnectionProvider implements JdbcConnectionProvider, Ser
                 if (driver.getClass().getName().equals(driverName)) {
                     return driver;
                 }
+            }
+        }
+        if (driverName.equalsIgnoreCase("com.clickhouse.jdbc.ClickHouseDriver")) {
+            String seatTunnelHome = System.getenv("SEATUNNEL_HOME");
+            try {
+                return JdbcUtils.getDriver(seatTunnelHome + "/lib/clickhouse-jdbc-0.4.6.jar", "com.clickhouse.jdbc.ClickHouseDriver");
+            } catch (MalformedURLException e) {
+                throw new JdbcConnectorException(
+                        JdbcConnectorErrorCode.CREATE_DRIVER_FAILED,
+                        "Fail to create driver of class " + driverName,
+                        e);
             }
         }
 

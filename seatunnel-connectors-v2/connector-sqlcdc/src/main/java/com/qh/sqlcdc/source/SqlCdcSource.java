@@ -19,6 +19,13 @@ package com.qh.sqlcdc.source;
 
 import org.apache.seatunnel.api.source.Boundedness;
 import org.apache.seatunnel.api.source.SeaTunnelSource;
+import org.apache.seatunnel.api.source.SupportCoordinate;
+import org.apache.seatunnel.api.table.catalog.CatalogTable;
+import org.apache.seatunnel.api.table.catalog.Column;
+import org.apache.seatunnel.api.table.catalog.PhysicalColumn;
+import org.apache.seatunnel.api.table.catalog.PrimaryKey;
+import org.apache.seatunnel.api.table.catalog.TableIdentifier;
+import org.apache.seatunnel.api.table.catalog.TableSchema;
 import org.apache.seatunnel.connectors.seatunnel.common.source.AbstractSingleSplitReader;
 import org.apache.seatunnel.connectors.seatunnel.common.source.AbstractSingleSplitSource;
 import org.apache.seatunnel.connectors.seatunnel.common.source.SingleSplitReaderContext;
@@ -43,11 +50,14 @@ import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSetMetaData;
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 
 @AutoService(SeaTunnelSource.class)
 @Slf4j
-public class SqlCdcSource
-        extends AbstractSingleSplitSource<SeaTunnelRow> {
+public class SqlCdcSource extends AbstractSingleSplitSource<SeaTunnelRow> implements SupportCoordinate {
     private SqlCdcConfig sqlCdcConfig;
     private JobContext jobContext;
     private JdbcDialect jdbcDialect;
@@ -72,6 +82,50 @@ public class SqlCdcSource
     @Override
     public SeaTunnelDataType<SeaTunnelRow> getProducedType() {
         return initTableField();
+    }
+
+    @Override
+    public List<CatalogTable> getProducedCatalogTables() {
+        SeaTunnelRowType rowType = initTableField();
+        // 1. 构建列信息
+        List<Column> columns = new ArrayList<>();
+        TableSchema.Builder schemaBuilder = TableSchema.builder();
+        for (int i = 0; i < rowType.getTotalFields(); i++) {
+            Integer scale = null;
+            Long columnLength = null;
+            PhysicalColumn column =
+                    PhysicalColumn.of(
+                            rowType.getFieldName(i),
+                            rowType.getFieldType(i),
+                            columnLength,
+                            scale,
+                            true,
+                            null,
+                            null);
+            schemaBuilder.column(column);
+        }
+
+        // 2. 构建主键（如果配置了）
+        PrimaryKey primaryKey = null;
+        if (sqlCdcConfig.getPrimaryKeys() != null && !sqlCdcConfig.getPrimaryKeys().isEmpty()) {
+            primaryKey = PrimaryKey.of(
+                    "pk_" + sqlCdcConfig.getPrimaryKeys(),
+                    sqlCdcConfig.getPrimaryKeys()
+            );
+        }
+        // 3. 构建 TableSchema
+        TableSchema tableSchema = schemaBuilder.primaryKey(primaryKey).build();
+        Map<String, String> options = new HashMap<>();
+        options.put("changelog-mode", "I,U,D");
+        // 4. 创建 CatalogTable
+        CatalogTable catalogTable = CatalogTable.of(
+                TableIdentifier.of("default", "default", "cdc_table"),
+                tableSchema,
+                options,
+                Collections.emptyList(),
+                null);
+
+        return Collections.singletonList(catalogTable);
     }
 
 
