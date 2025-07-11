@@ -128,7 +128,8 @@ public abstract class AbstractJdbcCatalog implements Catalog {
                 info.put("user", username);
                 info.put("password", pwd);
                 String seatTunnelHome = System.getenv("SEATUNNEL_HOME");
-                driver = JdbcUtils.getDriver(seatTunnelHome + "/lib_old_version/mysql-connector-java-5.1.49.jar", "com.mysql.jdbc.Driver");
+                driver = JdbcUtils.getDriver(seatTunnelHome + "/lib_old_version/mysql-connector-java-5.1.43.jar",
+                        "com.mysql.jdbc.Driver");
                 connection = driver.connect(url, info);
                 return connection;
             }

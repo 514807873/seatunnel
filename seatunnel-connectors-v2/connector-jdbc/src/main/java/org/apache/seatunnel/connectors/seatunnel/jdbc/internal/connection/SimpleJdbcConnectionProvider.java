@@ -102,7 +102,8 @@ public class SimpleJdbcConnectionProvider implements JdbcConnectionProvider, Ser
         try {
             if (driverName.equalsIgnoreCase("com.mysql.jdbc.Driver")) {
                 String seatTunnelHome = System.getenv("SEATUNNEL_HOME");
-                return JdbcUtils.getDriver(seatTunnelHome + "/lib_old_version/mysql-connector-java-5.1.49.jar", "com.mysql.jdbc.Driver");
+                return JdbcUtils.getDriver(seatTunnelHome + "/lib_old_version/mysql-connector-java-5.1.43.jar", "com"
+                                                                                                                + ".mysql.jdbc.Driver");
             }
             Class<?> clazz =
                     Class.forName(driverName, true, Thread.currentThread().getContextClassLoader());
