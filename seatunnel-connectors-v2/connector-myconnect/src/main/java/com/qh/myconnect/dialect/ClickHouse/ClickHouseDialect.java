@@ -777,12 +777,12 @@ public class ClickHouseDialect implements JdbcDialect {
         return ps.getMetaData();
     }
 
-    public String modifyTimestamp(JdbcSinkConfig jdbcSinkConfig) {
-        DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
-        LocalDateTime now = LocalDateTime.now();
-        String currentTimeString = now.format(formatter);
+    public String modifyTimestamp(JdbcSinkConfig jdbcSinkConfig, Connection conn) {
+        String currentTimeString = this.currentTimeString(conn, jdbcSinkConfig.getDbSchema(),
+                jdbcSinkConfig.getTable(), jdbcSinkConfig.getPreConfig().getAutoTimestampColumnName());
         String autoTimestampColumnName = jdbcSinkConfig.getPreConfig().getAutoTimestampColumnName();
-        String sql = "alter table  %s update " + autoTimestampColumnName + "='%s' where 1=1";
+        String sql = "alter table %s update " + autoTimestampColumnName + "=%s where "+ autoTimestampColumnName + " "
+                     + "is null";
         if (StringUtils.isNoneBlank(jdbcSinkConfig.getDbSchema())) {
             sql = String.format(sql, jdbcSinkConfig.getDbSchema() + "." + jdbcSinkConfig.getTable(), currentTimeString);
         }

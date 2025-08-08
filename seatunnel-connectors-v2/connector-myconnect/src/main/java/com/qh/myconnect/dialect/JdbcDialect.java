@@ -1379,7 +1379,7 @@ public interface JdbcDialect extends Serializable {
         String currentTimeString = this.currentTimeString(conn, jdbcSinkConfig.getDbSchema(),
                 jdbcSinkConfig.getTable(), jdbcSinkConfig.getPreConfig().getAutoTimestampColumnName());
         String autoTimestampColumnName = jdbcSinkConfig.getPreConfig().getAutoTimestampColumnName();
-        String sql = "update %s set " + autoTimestampColumnName + "=%s ";
+        String sql = "update %s set " + autoTimestampColumnName + "=%s where "+ autoTimestampColumnName + " is null";
         if (StringUtils.isNoneBlank(jdbcSinkConfig.getDbSchema())) {
             sql = String.format(sql, jdbcSinkConfig.getDbSchema() + "." + jdbcSinkConfig.getTable(), currentTimeString);
         }

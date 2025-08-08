@@ -270,10 +270,10 @@ public class MySinkWriterComplete extends AbstractSinkWriter<SeaTunnelRow, Void>
         fieldMapper.forEach((sourceColumnName, targetColumnName) -> {
             CodeConverter converter = new CodeConverter();
             if (codeMapper != null) {
-                String any = codeMapper.get(targetColumnName);
-                if (any != null) {
-                    if (any.startsWith("ENCRYPT.") && containsAtLeastTwoDotsRegex(any)) {
-                        converter = new CodeConverter(targetColumnName,any.split("\\.")[2]);
+                String safeCode = codeMapper.get(targetColumnName);
+                if (safeCode != null) {
+                    if (safeCode.startsWith("ENCRYPT.") && containsAtLeastTwoDotsRegex(safeCode)) {
+                        converter = new CodeConverter(targetColumnName,safeCode.split("\\.")[2]);
                     }
                 }
             }
@@ -305,7 +305,7 @@ public class MySinkWriterComplete extends AbstractSinkWriter<SeaTunnelRow, Void>
                     if (safeCode.startsWith("DM")) {
                         columnMapper.setConverter(converter.dmConverter(safeCode));
                     }
-                    else if (safeCode.startsWith("ENCRYPT")) {
+                    else if (safeCode.startsWith("ENCRYPT.")) {
                         columnMapper.setConverter(converter.encryptConverter(safeCode));
                     }
                     else if (safeCode.startsWith("FUNCTION.")) {

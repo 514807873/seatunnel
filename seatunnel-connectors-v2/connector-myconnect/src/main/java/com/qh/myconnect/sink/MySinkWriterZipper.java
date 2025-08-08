@@ -133,6 +133,12 @@ public class MySinkWriterZipper extends AbstractSinkWriter<SeaTunnelRow, Void> {
 
     @Override
     public void write(SeaTunnelRow element) throws IOException {
+        List<ColumnMapper> needDecodeColumnMappers =
+                this.columnMappers.stream().filter(x -> x.getDecodeConverter() != null).collect(Collectors.toList());
+        for (ColumnMapper needDecodeColumnMapper : needDecodeColumnMappers) {
+            element.setField(needDecodeColumnMapper.getSourceRowPosition(),
+                    needDecodeColumnMapper.getDecodeConverter().apply(element.getField(needDecodeColumnMapper.getSourceRowPosition())));
+        }
         midCount.setWriteCount(midCount.getWriteCount() + 1);
         if (this.jdbcSinkConfig.isOpenQuality()) {
             List<QualityFieldRule> rules = this.jdbcSinkConfig.getQualityFieldRule();

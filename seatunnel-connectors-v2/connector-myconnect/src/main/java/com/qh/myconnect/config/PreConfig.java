@@ -59,6 +59,9 @@ public class PreConfig implements Serializable {
     @OptionMark(description = "自动时间戳")
     private boolean autoTimestamp = false;
 
+    @OptionMark(description = "blob自动转base64")
+    private boolean autoToBase64 = true;
+
     @OptionMark(description = "自动时间戳字段名")
     private String autoTimestampColumnName;
 

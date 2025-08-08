@@ -12,6 +12,7 @@ import cn.hutool.crypto.symmetric.SM4;
 import com.qh.myconnect.config.JybSm4Util;
 import com.qh.myconnect.config.Util;
 import lombok.Data;
+import lombok.extern.slf4j.Slf4j;
 
 import java.nio.charset.StandardCharsets;
 import java.sql.Connection;
@@ -23,6 +24,7 @@ import java.util.Map;
 import java.util.function.Function;
 
 @Data
+@Slf4j
 public class CodeConverter {
     private Map<String, String> dmMap;
     private AES aes;
@@ -206,6 +208,7 @@ public class CodeConverter {
                     try {
                         decrypt = sm4.decrypt(String.valueOf(str));
                     } catch (Exception e) {
+                        log.info("解密错误:"+String.valueOf(str));
                         throw new RuntimeException("解密错误,请检查秘钥配置", e);
                     }
                     return new String(decrypt, StandardCharsets.UTF_8);
