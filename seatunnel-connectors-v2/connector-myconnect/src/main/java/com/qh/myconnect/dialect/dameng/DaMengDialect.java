@@ -160,7 +160,7 @@ public class DaMengDialect implements JdbcDialect {
             preparedStatement.setObject(position, null);
         }
         else {
-            switch (DAMENGType) {
+            switch (DAMENGType.toUpperCase()) {
                 case DaMengTypeMapper.DAMENG_INTEGER:
                     preparedStatement.setInt(position, Integer.parseInt(value));
                     break;
@@ -218,11 +218,7 @@ public class DaMengDialect implements JdbcDialect {
                 // Doesn't support yet
                 case DaMengTypeMapper.DAMENG_UNKNOWN:
                 default:
-                    throw new JdbcConnectorException(
-                            CommonErrorCode.CONVERT_TO_SEATUNNEL_TYPE_ERROR,
-                            String.format(
-                                    "Doesn't support DAMENG type '%s' on column '%s'  yet.",
-                                    DAMENGType, DAMENGType));
+                    throw new RuntimeException(String.format("Doesn't support DAMENG type '%s' on column '%s'  yet.", DAMENGType, DAMENGType));
             }
         }
     }

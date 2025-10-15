@@ -17,6 +17,7 @@
 
 package com.qh.myconnect.dialect.oracle;
 
+import org.apache.logging.log4j.core.appender.ScriptAppenderSelector;
 import org.apache.seatunnel.api.table.type.BasicType;
 import org.apache.seatunnel.api.table.type.DecimalType;
 import org.apache.seatunnel.api.table.type.LocalTimeType;
@@ -45,6 +46,9 @@ public class OracleTypeMapper implements JdbcDialectTypeMapper {
     static final String ORACLE_FLOAT = "FLOAT";
     static final String ORACLE_REAL = "REAL";
     static final String ORACLE_INTEGER = "INTEGER";
+
+    static final String ORACLE_SYS_XML = "SYS.XMLTYPE";
+    static final String ORACLE_XML = "XMLTYPE";
 
     // -------------------------string----------------------------
     static final String ORACLE_CHAR = "CHAR";
@@ -117,6 +121,9 @@ public class OracleTypeMapper implements JdbcDialectTypeMapper {
             case ORACLE_BFILE:
                 return PrimitiveByteArrayType.INSTANCE;
                 // Doesn't support yet
+            case ORACLE_SYS_XML:
+            case ORACLE_XML:
+                return BasicType.STRING_TYPE;
             case ORACLE_UNKNOWN:
             default:
                 final String jdbcColumnName = metadata.getColumnName(colIndex);

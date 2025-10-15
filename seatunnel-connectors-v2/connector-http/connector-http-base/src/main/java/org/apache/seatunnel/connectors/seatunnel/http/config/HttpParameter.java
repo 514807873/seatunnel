@@ -34,6 +34,7 @@ public class HttpParameter implements Serializable {
     protected Map<String, String> params;
     protected String body;
     protected String offsetJsonPath;
+    protected String dynamicMethod;
     protected int maxSafePage;
     protected int pollIntervalMillis;
     protected int retry;
@@ -47,6 +48,9 @@ public class HttpParameter implements Serializable {
         // set url
         if (pluginConfig.hasPath("offset")) {
             this.setOffsetJsonPath(pluginConfig.getString("offset"));
+        }
+        if (pluginConfig.hasPath("dynamicMethod")) {
+            this.setDynamicMethod(pluginConfig.getString("dynamicMethod"));
         }
         this.setMaxSafePage(pluginConfig.getInt("max_safe_page"));
         this.setUrl(pluginConfig.getString(HttpConfig.URL.key()));

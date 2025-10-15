@@ -31,8 +31,13 @@ public class HttpConfig {
     public static final boolean DEFAULT_ENABLE_MULTI_LINES = false;
     public static final int DEFAULT_CONNECT_TIMEOUT_MS = 6000 * 2;
     public static final int DEFAULT_SOCKET_TIMEOUT_MS = 6000 * 10;
+
     public static final Option<String> URL =
             Options.key("url").stringType().noDefaultValue().withDescription("Http request url");
+
+    public static final Option<String> dynamicMethod =
+            Options.key("dynamicMethod").stringType().noDefaultValue().withDescription("dynamicMethod");
+
     public static final Option<Long> TOTAL_PAGE_SIZE =
             Options.key("total_page_size")
                     .longType()
@@ -100,6 +105,7 @@ public class HttpConfig {
                     .noDefaultValue()
                     .withDescription(
                             "SeaTunnel json field.When partial json data is required, this parameter can be configured to obtain data");
+
     public static final Option<String> CONTENT_FIELD =
             Options.key("content_field")
                     .stringType()

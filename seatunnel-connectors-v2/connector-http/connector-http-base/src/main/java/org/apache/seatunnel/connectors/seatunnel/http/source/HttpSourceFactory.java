@@ -55,6 +55,7 @@ public class HttpSourceFactory implements TableSourceFactory {
     public OptionRule.Builder getHttpBuilder() {
         return OptionRule.builder()
                 .required(HttpConfig.URL)
+                .optional(HttpConfig.dynamicMethod)
                 .optional(HttpConfig.METHOD)
                 .optional(HttpConfig.HEADERS)
                 .optional(HttpConfig.PARAMS)

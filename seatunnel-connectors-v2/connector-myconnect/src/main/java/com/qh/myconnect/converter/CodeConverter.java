@@ -9,16 +9,19 @@ import cn.hutool.crypto.asymmetric.SM2;
 import cn.hutool.crypto.digest.DigestUtil;
 import cn.hutool.crypto.symmetric.AES;
 import cn.hutool.crypto.symmetric.SM4;
+import com.qh.myconnect.config.Base64Utils;
 import com.qh.myconnect.config.JybSm4Util;
 import com.qh.myconnect.config.Util;
 import lombok.Data;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.commons.lang3.StringUtils;
 
 import java.nio.charset.StandardCharsets;
 import java.sql.Connection;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
+import java.util.Base64;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Function;
@@ -54,13 +57,15 @@ public class CodeConverter {
         String encipherName = null;
         String publicKey = null;
         String privateKey = null;
+        String keyFormat = null;
         try (Connection con = util.getPanguConnection(); Statement stmt = con.createStatement()) {
             String sql = String.format("SELECT "
                                        + " a.id, "
                                        + " b.encipher_way encipher_way, "
                                        + " b.encipher_name encipher_name, "
                                        + " a.key_content key_content, "
-                                       + " a.key_private key_private "
+                                       + " a.key_private key_private, "
+                                       + " a.secret_key_format key_format "
                                        + "FROM "
                                        + " pangu_data_management.secure_custom_key a "
                                        + " LEFT JOIN pangu_data_management.secure_encipher_manage b ON a.encipher_id = b.id  "
@@ -71,6 +76,7 @@ public class CodeConverter {
                 encipherName = rs.getString("encipher_name");
                 publicKey = rs.getString("key_content");
                 privateKey = rs.getString("key_private");
+                keyFormat = rs.getString("key_format");
             }
             else {
                 // 校验是不是用户端etl 根据密钥 id 是不是在 secure_encipher_manage_id里面有值来判断
@@ -124,7 +130,13 @@ public class CodeConverter {
             sm4Util = new JybSm4Util(publicKey);
         }
         else if (encipherName.equalsIgnoreCase("SM4加密") || encipherName.equalsIgnoreCase("SM4")) {
-            byte[] key = publicKey.substring(0, 16).getBytes();
+            byte[] key;
+            if(!StringUtils.isEmpty(keyFormat) && "base64".equalsIgnoreCase(keyFormat)){
+                key = Base64.getDecoder().decode(publicKey);
+            }
+            {
+                key = publicKey.substring(0, 16).getBytes();
+            }
             this.sm4 = new SM4(key);
         }
         else if (encipherName.equalsIgnoreCase("SM2加密") || encipherName.equalsIgnoreCase("SM2")) {
@@ -232,4 +244,5 @@ public class CodeConverter {
         }
         return false;
     }
+
 }

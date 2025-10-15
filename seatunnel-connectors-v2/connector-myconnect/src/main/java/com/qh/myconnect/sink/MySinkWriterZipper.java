@@ -317,10 +317,10 @@ public class MySinkWriterZipper extends AbstractSinkWriter<SeaTunnelRow, Void> {
         fieldMapper.forEach((sourceColumnName, targetColumnName) -> {
             CodeConverter converter = new CodeConverter();
             if (codeMapper != null) {
-                String any = codeMapper.get(targetColumnName);
+                String any = codeMapper.get(targetColumnName) == null ? codeMapper.get(sourceColumnName) : codeMapper.get(targetColumnName);
                 if (any != null) {
                     if (any.startsWith("ENCRYPT.") && containsAtLeastTwoDotsRegex(any)) {
-                        converter = new CodeConverter(targetColumnName,any.split("\\.")[2]);
+                        converter = new CodeConverter(targetColumnName, any.split("\\.")[2]);
                     }
                 }
             }
@@ -353,7 +353,7 @@ public class MySinkWriterZipper extends AbstractSinkWriter<SeaTunnelRow, Void> {
                 throw new RuntimeException(e);
             }
             if (codeMapper != null) {
-                String safeCode = codeMapper.get(targetColumnName);
+                String safeCode = codeMapper.get(targetColumnName) == null ? codeMapper.get(sourceColumnName) : codeMapper.get(targetColumnName);
                 if (safeCode != null && StringUtils.isNoneBlank(safeCode)) {
                     if (safeCode.startsWith("DM")) {
                         columnMapper.setConverter(converter.dmConverter(safeCode));
@@ -370,10 +370,10 @@ public class MySinkWriterZipper extends AbstractSinkWriter<SeaTunnelRow, Void> {
             }
             CodeConverter decodeConverter = new CodeConverter();
             if (decodeMapper != null) {
-                String decode = decodeMapper.get(targetColumnName);
+                String decode = decodeMapper.get(targetColumnName) == null ? decodeMapper.get(sourceColumnName) : decodeMapper.get(targetColumnName);
                 if (decode != null) {
                     if (decode.startsWith("DECRYPT.") && containsAtLeastTwoDotsRegex(decode)) {
-                        decodeConverter = new CodeConverter(targetColumnName,decode.split("\\.")[2]);
+                        decodeConverter = new CodeConverter(targetColumnName, decode.split("\\.")[2]);
                     }
                     columnMapper.setDecodeConverter(decodeConverter.decryptConverter(decode));
                 }

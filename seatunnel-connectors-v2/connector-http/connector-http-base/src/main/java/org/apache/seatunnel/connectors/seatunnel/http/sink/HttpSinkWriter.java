@@ -17,6 +17,7 @@
 
 package org.apache.seatunnel.connectors.seatunnel.http.sink;
 
+import com.alibaba.fastjson.JSONObject;
 import org.apache.seatunnel.api.serialization.SerializationSchema;
 import org.apache.seatunnel.api.sink.SupportMultiTableSinkWriter;
 import org.apache.seatunnel.api.table.type.SeaTunnelRow;
@@ -58,10 +59,13 @@ public class HttpSinkWriter extends AbstractSinkWriter<SeaTunnelRow, Void>
     public void write(SeaTunnelRow element) throws IOException {
         byte[] serialize = serializationSchema.serialize(element);
         String body = new String(serialize);
+        JSONObject postData= new JSONObject();
+        JSONObject jsonObject = JSONObject.parseObject(body);
+        postData.put("xj_data", jsonObject.toJSONString());
         try {
             // only support post web hook
             HttpResponse response =
-                    httpClient.doPost(httpParameter.getUrl(), httpParameter.getHeaders(), body);
+                    httpClient.doPost(httpParameter.getUrl(), httpParameter.getHeaders(), postData.toJSONString());
             if (HttpResponse.STATUS_OK == response.getCode()) {
                 return;
             }

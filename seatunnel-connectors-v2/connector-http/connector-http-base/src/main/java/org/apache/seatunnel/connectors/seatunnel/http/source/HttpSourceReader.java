@@ -18,6 +18,7 @@
 package org.apache.seatunnel.connectors.seatunnel.http.source;
 
 import com.alibaba.fastjson.JSONObject;
+import org.apache.commons.lang3.StringUtils;
 import org.apache.commons.lang3.math.NumberUtils;
 import org.apache.seatunnel.api.serialization.DeserializationSchema;
 import org.apache.seatunnel.api.source.Boundedness;
@@ -162,6 +163,15 @@ public class HttpSourceReader extends AbstractSingleSplitReader<SeaTunnelRow> {
                     pollAndCollectData(output);
                     pageIndex += 1;
                     Thread.sleep(3);
+                    if (StringUtils.isNotEmpty(this.httpParameter.getDynamicMethod())) {
+                        String body = this.httpParameter.getBody();
+                        JSONObject jsonBody = JSONObject.parseObject(body);
+                        if (jsonBody == null) {
+                            jsonBody = new JSONObject();
+                        }
+                        jsonBody.put("method", this.httpParameter.getDynamicMethod());
+                        this.httpParameter.setBody(jsonBody.toJSONString());
+                    }
                 }
             }
             else {
@@ -185,11 +195,17 @@ public class HttpSourceReader extends AbstractSingleSplitReader<SeaTunnelRow> {
                         if (jsonBody.containsKey("offset")) {
                             jsonBody.put("offset", offset);
                         }
+                        if (StringUtils.isNotEmpty(this.httpParameter.getDynamicMethod())) {
+                            jsonBody.put("method", this.httpParameter.getDynamicMethod());
+                        }
                         this.httpParameter.setBody(jsonBody.toString());
                         Thread.sleep(3);
                     }
                 }
                 else {
+                    if (StringUtils.isNotEmpty(this.httpParameter.getDynamicMethod())) {
+                        jsonBody.put("method", this.httpParameter.getDynamicMethod());
+                    }
                     this.httpParameter.setBody(jsonBody.toString());
                     pollAndCollectData(output);
                 }
@@ -219,6 +235,8 @@ public class HttpSourceReader extends AbstractSingleSplitReader<SeaTunnelRow> {
             data = JsonUtils.toJsonNode(parseToMap(decodeJSON(data), jsonField)).toString();
             boolean allAttributesNullInObjects = isAllAttributesNullInObjects(data);
             if (allAttributesNullInObjects) {
+                log.info("检测到接口返回空数组,程序退出");
+                noMoreElementFlag = true;
                 return;
             }
         }
