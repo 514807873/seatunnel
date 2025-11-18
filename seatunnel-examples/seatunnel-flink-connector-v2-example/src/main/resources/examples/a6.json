@@ -1,91 +1,149 @@
 {
   "env": {
-    "ignoreEmptySource": true,
+    "ignoreEmptySource": false,
     "job.mode": "BATCH",
     "isRecordErrorData": 1,
     "execution.parallelism": 1,
+    "openChangeAbs": false,
     "maxRecordNumber": 100,
-    "job.name": "测试XMLTYPE"
+    "job.name": "测试表字段顺序",
+    "changeAbs": 0
   },
   "source": [
     {
       "db_type": "ORACLE",
-      "dbSchema": "USR_ADS",
+      "dbSchema": "USR_XWZX_001",
       "columns": [
-        "ID",
-        "NAME"
+        "ZD1",
+        "ZD2",
+        "ZD3",
+        "ZD4",
+        "ZD5"
       ],
-      "query": "select \"ID\",\"NAME\" from \"USR_ADS\".\"TESTXML\"",
+      "query": " select  \"ZD1\",\"ZD2\",\"ZD3\",\"ZD4\",\"ZD5\" from  \"USR_XWZX_001\".\"CSBZDSX\" ",
       "input_type": "table",
-      "db_datasource_id": "1958805362252890114",
+      "db_datasource_id": "1980201307644772353",
       "result_columns": [
         {
-          "schema": "USR_ADS",
-          "fullAlias": "ID",
-          "nullable": true,
-          "typeName": "NUMBER",
-          "type": "NUMBER",
-          "hasQuality": false,
+          "fullAlias": "(字段1)ZD1",
+          "nullable": false,
+          "isPrimaryKey": false,
+          "remark": "字段1",
+          "type": "VARCHAR2",
           "decimalDigit": 0,
-          "size": 0,
+          "secretWayDisabled": false,
+          "size": 100,
           "autoincrement": false,
-          "name": "ID",
-          "table": "TESTXML",
-          "order": 1,
+          "name": "ZD1",
+          "finalAlias": "字段1",
+          "order": 0,
           "primaryKey": false,
-          "sourceColumn": "1958805362252890114.USR_ADS.TESTXML.ID"
+          "sourceColumn": "1980201307644772353.USR_XWZX_001.CSBZDSX.ZD1"
         },
         {
-          "schema": "USR_ADS",
-          "fullAlias": "NAME",
-          "nullable": true,
-          "typeName": "XMLTYPE",
-          "type": "XMLTYPE",
-          "hasQuality": false,
+          "fullAlias": "(字段2)ZD2",
+          "nullable": false,
+          "isPrimaryKey": false,
+          "remark": "字段2",
+          "type": "VARCHAR2",
           "decimalDigit": 0,
-          "size": 2000,
+          "secretWayDisabled": false,
+          "size": 100,
           "autoincrement": false,
-          "name": "NAME",
-          "table": "TESTXML",
-          "order": 2,
+          "name": "ZD2",
+          "finalAlias": "字段2",
+          "order": 0,
           "primaryKey": false,
-          "sourceColumn": "1958805362252890114.USR_ADS.TESTXML.NAME"
+          "sourceColumn": "1980201307644772353.USR_XWZX_001.CSBZDSX.ZD2"
+        },
+        {
+          "fullAlias": "(字段3)ZD3",
+          "nullable": false,
+          "isPrimaryKey": false,
+          "remark": "字段3",
+          "type": "VARCHAR2",
+          "decimalDigit": 0,
+          "secretWayDisabled": false,
+          "size": 100,
+          "autoincrement": false,
+          "name": "ZD3",
+          "finalAlias": "字段3",
+          "order": 0,
+          "primaryKey": false,
+          "sourceColumn": "1980201307644772353.USR_XWZX_001.CSBZDSX.ZD3"
+        },
+        {
+          "fullAlias": "(字段4)ZD4",
+          "nullable": false,
+          "isPrimaryKey": false,
+          "remark": "字段4",
+          "type": "VARCHAR2",
+          "decimalDigit": 0,
+          "secretWayDisabled": false,
+          "size": 100,
+          "autoincrement": false,
+          "name": "ZD4",
+          "finalAlias": "字段4",
+          "order": 0,
+          "primaryKey": false,
+          "sourceColumn": "1980201307644772353.USR_XWZX_001.CSBZDSX.ZD4"
+        },
+        {
+          "fullAlias": "(字段5)ZD5",
+          "nullable": false,
+          "isPrimaryKey": false,
+          "remark": "字段5",
+          "type": "VARCHAR2",
+          "decimalDigit": 0,
+          "secretWayDisabled": false,
+          "size": 100,
+          "autoincrement": false,
+          "name": "ZD5",
+          "finalAlias": "字段5",
+          "order": 0,
+          "primaryKey": false,
+          "sourceColumn": "1980201307644772353.USR_XWZX_001.CSBZDSX.ZD5"
         }
       ],
       "result_table_name": "t1",
       "plugin_name": "JDBC",
-      "table_name": "TESTXML",
-      "url": "jdbc:oracle:thin:@192.168.11.140:1521/XJCZPDB",
-      "bindPars": [],
-      "password": "Xjcz#8[%psCbUL#z(EHJq#ads",
+      "table_name": "CSBZDSX",
+      "url": "jdbc:oracle:thin:@192.168.11.128:1521/XJCZPDB?ssl=true",
+      "password": "6)nvZ8HqXVTBa2HP",
       "database": "XJCZPDB",
       "driver": "oracle.jdbc.driver.OracleDriver",
-      "user": "USR_ADS"
+      "user": "USR_XWZX_001"
     }
   ],
   "transform": [],
   "sink": [
     {
       "db_type": "ORACLE",
-      "dbSchema": "USR_ADS",
+      "dbSchema": "USR_DWD",
+      "primary_keys": [],
       "code_mapper": {},
       "decode_mapper": {},
-      "db_datasource_id": "1958805362252890114",
+      "db_datasource_id": "1953643139563495425",
       "source_table_name": [
         "t1"
       ],
       "plugin_name": "XJJDBC",
       "url": "jdbc:oracle:thin:@192.168.11.140:1521/XJCZPDB",
-      "password": "Xjcz#8[%psCbUL#z(EHJq#ads",
+      "password": "Xjcz#8[%psCbUL#z(EHJq#dwd",
       "driver": "oracle.jdbc.driver.OracleDriver",
       "field_mapper": {
-        "ID": "ID",
-        "NAME": "NAME"
+        "ZD1": "ZD1",
+        "ZD3": "ZD3",
+        "ZD2": "ZD2",
+        "ZD5": "ZD5",
+        "ZD4": "ZD4"
       },
-      "user": "USR_ADS",
-      "table": "TESTXML2",
+      "batchSize": 1000,
+      "user": "USR_DWD",
+      "table": "T_UNKNOWN_CSBZDSX",
       "pre_config": {
-        "cleanTableWhenCompleteNoDataIn": true,
+        "openQuality": false,
+        "cleanTableWhenCompleteNoDataIn": false,
         "recordOperate": false,
         "dontCompare": false,
         "zipperFlagValue": [
@@ -93,15 +151,19 @@
           "U",
           "D"
         ],
-        "openDelete": true,
         "autoTimestamp": false,
+        "openDelete": true,
         "insertMode": "complete",
-        "ignoreColumns": [],
-        "zipperColumns": [],
-        "zipperTableName": "",
+        "autoToBase64": true,
+        "ignoreColumns": [
+          "TSTAMP",
+          "GXSJ",
+          "gxsj",
+          "tstamp"
+        ],
+        "ignoreTstamp": true,
         "cleanTableWhenComplete": true,
-        "incrementMode": "update",
-        "preSql": ""
+        "incrementMode": "update"
       }
     }
   ]

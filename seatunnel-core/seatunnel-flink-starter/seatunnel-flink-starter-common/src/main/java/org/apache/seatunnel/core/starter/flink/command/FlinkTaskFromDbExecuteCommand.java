@@ -18,6 +18,7 @@
 package org.apache.seatunnel.core.starter.flink.command;
 
 import lombok.extern.slf4j.Slf4j;
+import org.apache.commons.lang3.StringUtils;
 import org.apache.seatunnel.common.Constants;
 import org.apache.seatunnel.core.starter.command.Command;
 import org.apache.seatunnel.core.starter.exception.CommandExecuteException;
@@ -75,7 +76,12 @@ public class FlinkTaskFromDbExecuteCommand implements Command<FlinkCommandArgs> 
     private String getConfig() {
         try {
             String postData = String.format("{\"jobId\":\"%s\"}", new Object[]{this.flinkCommandArgs.getConfigFile()});
-            String st_config_file_url = System.getenv("ST_SERVICE_URL") + "/SeaTunnelJob/stConfigString";
+            String serviceUrl = System.getenv("ST_SERVICE_URL");
+            if (StringUtils.isEmpty(serviceUrl)) {
+                serviceUrl = "http://pangu-seatunnel:8872";
+            }
+            log.info("st_config_file_url: %s", serviceUrl);
+            String st_config_file_url = serviceUrl + "/SeaTunnelJob/stConfigString";
             StringBuilder stringBuilder = new StringBuilder();
             URL apiUrl = new URL(st_config_file_url);
             HttpURLConnection connection = (HttpURLConnection) apiUrl.openConnection();

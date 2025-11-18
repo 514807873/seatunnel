@@ -73,7 +73,8 @@ public class MySinkWriterComplete extends AbstractSinkWriter<SeaTunnelRow, Void>
     private final Set<String> sqlErrorType = new HashSet();
 
     private boolean isTrino = false;
-    private final RuleChecker ruleChecker = SimpleRuleChecker.newInstance();
+    private List<QualityFieldRule> rules = null;
+    private RuleChecker ruleChecker = null;
 
 
     public MySinkWriterComplete(SeaTunnelRowType seaTunnelRowType, Context context, ReadonlyConfig config, JobContext jobContext, Long tableCount) throws SQLException {
@@ -117,6 +118,15 @@ public class MySinkWriterComplete extends AbstractSinkWriter<SeaTunnelRow, Void>
         this.metaDataHash = metaDataHash;
         if (!isTrino) {
             conn.commit();
+        }
+        if(this.jdbcSinkConfig.isOpenQuality()){
+            rules = this.jdbcSinkConfig.getQualityFieldRule();
+            List<String> ruleIds = rules.stream().map(QualityFieldRule::getCheckruleId).collect(Collectors.toList());
+            try {
+                ruleChecker = SimpleRuleChecker.newInstance(ruleIds);
+            } catch (Exception e) {
+                throw new RuntimeException(e);
+            }
         }
     }
 

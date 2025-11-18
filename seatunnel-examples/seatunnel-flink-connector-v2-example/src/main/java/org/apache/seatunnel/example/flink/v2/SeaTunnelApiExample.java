@@ -33,7 +33,7 @@ public class SeaTunnelApiExample {
             throws FileNotFoundException, URISyntaxException, CommandException {
         //本地json文件执行
         runLocal(args);
-        //从数据库获取配置文件执行
+//        从数据库获取配置文件执行
 //            runFromDb(args);
 
     }
@@ -51,7 +51,7 @@ public class SeaTunnelApiExample {
     public static  void runFromDb(String[] args) throws FileNotFoundException, URISyntaxException, CommandException{
         FlinkCommandArgs flinkCommandArgs = new FlinkCommandArgs();
         flinkCommandArgs.setDb(true);
-        flinkCommandArgs.setConfigFile("1872458865581809665");
+        flinkCommandArgs.setConfigFile("1982721983501737985");
 //        flinkCommandArgs.setConfigFile("1770613255461834753");
         String fid = UUID.randomUUID().toString().replaceAll("-", "");
         System.out.println("---------------------------------------fid---------------------------" + fid);

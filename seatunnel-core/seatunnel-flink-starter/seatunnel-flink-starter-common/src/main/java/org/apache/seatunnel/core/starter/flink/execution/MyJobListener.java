@@ -3,6 +3,7 @@ package org.apache.seatunnel.core.starter.flink.execution;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.commons.lang3.StringUtils;
 import org.apache.flink.api.common.JobExecutionResult;
 import org.apache.flink.core.execution.JobClient;
 import org.apache.flink.core.execution.JobListener;
@@ -30,7 +31,11 @@ public class MyJobListener implements JobListener, Serializable {
 
     @Override
     public void onJobExecuted(@Nullable JobExecutionResult jobExecutionResult, @Nullable Throwable throwable) {
-        String st_log_back_url = System.getenv("ST_SERVICE_URL")+"/SeaTunnelJob/flinkCallBack";
+        String serviceUrl = System.getenv("ST_SERVICE_URL");
+        if (StringUtils.isEmpty(serviceUrl)) {
+            serviceUrl = "http://pangu-seatunnel:8872";
+        }
+        String st_log_back_url = serviceUrl+"/SeaTunnelJob/flinkCallBack";
         if (throwable == null) {
             try {
                 ObjectMapper mapper = new ObjectMapper();

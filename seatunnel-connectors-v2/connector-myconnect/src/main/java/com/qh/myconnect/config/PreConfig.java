@@ -7,6 +7,7 @@ import org.apache.seatunnel.api.configuration.util.OptionMark;
 //import com.clickhouse.jdbc.internal.ClickHouseConnectionImpl;
 import com.qh.myconnect.dialect.JdbcDialectFactory;
 import lombok.Data;
+import org.apache.seatunnel.shade.com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 
 import java.io.Serializable;
 import java.sql.Connection;
@@ -18,6 +19,7 @@ import java.util.Objects;
 
 @Data
 @Slf4j
+@JsonIgnoreProperties(ignoreUnknown = true)
 public class PreConfig implements Serializable {
     private static final long serialVersionUID = -1L;
 

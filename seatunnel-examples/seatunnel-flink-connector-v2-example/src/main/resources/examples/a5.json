@@ -5,7 +5,7 @@
     "isRecordErrorData": 0,
     "execution.parallelism": 1,
     "maxRecordNumber": 0,
-    "job.name": "aa1",
+    "job.name": "sqlcdc2",
     "checkpoint.interval": 5000
   },
   "source": [
@@ -18,7 +18,7 @@
       "table-names": [
         "usr_ods_db.ss_test"
       ],
-      "db_datasource_id": "1977900301500133378",
+      "db_datasource_id": "1990302441701048321",
       "result_columns": [
         {
           "fullAlias": "ID",
@@ -36,7 +36,7 @@
           "table": "ss_test",
           "order": 1,
           "primaryKey": true,
-          "sourceColumn": "1977900301500133378..ss_test.ID"
+          "sourceColumn": "1990302441701048321..ss_test.ID"
         },
         {
           "fullAlias": "NAME",
@@ -54,7 +54,7 @@
           "table": "ss_test",
           "order": 2,
           "primaryKey": false,
-          "sourceColumn": "1977900301500133378..ss_test.NAME"
+          "sourceColumn": "1990302441701048321..ss_test.NAME"
         },
         {
           "fullAlias": "SEX",
@@ -72,36 +72,59 @@
           "table": "ss_test",
           "order": 3,
           "primaryKey": false,
-          "sourceColumn": "1977900301500133378..ss_test.SEX"
+          "sourceColumn": "1990302441701048321..ss_test.SEX"
         }
       ],
-      "result_table_name": "t1",
+      "result_table_name": "t3",
       "plugin_name": "MySQL-CDC",
       "user": "root",
       "username": "root"
     }
   ],
-  "transform": [],
+  "transform": [
+    {
+      "source_table_name": [
+        "t3"
+      ],
+      "result_table_name": "t2",
+      "plugin_name": "FilterValue",
+      "fields": {
+        "logicalOperator": "",
+        "rules": [
+          {
+            "logicalOperator": "",
+            "rules": [
+              {
+                "name": "ID",
+                "value": "10000",
+                "operator": "notEqual"
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ],
   "sink": [
     {
       "db_type": "ORACLE",
-      "dbSchema": "QINHUAN",
+      "dbSchema": "USR_ODS",
       "primary_keys": [
         "ID"
       ],
-      "db_datasource_id": "1953696405788340226",
+      "db_datasource_id": "1953287455961489409",
       "source_table_name": [
-        "t1"
+        "t3"
       ],
       "plugin_name": "JDBC",
-      "url": "jdbc:oracle:thin:@192.168.10.46:1521/orcl",
+      "url": "jdbc:oracle:thin:@192.168.11.140:1521/XJCZPDB",
       "value_mapper": {
         "0": "ID",
         "1": "NAME",
         "2": "SEX"
       },
-      "database": "orcl",
-      "password": "admin@123@456@789",
+      "database": "XJCZPDB",
+      "password": "Xjcz#8[%psCbUL#z(EHJq#ods",
       "driver": "oracle.jdbc.driver.OracleDriver",
       "field_mapper": {
         "SEX": "SEX",
@@ -109,8 +132,8 @@
         "NAME": "NAME"
       },
       "generate_sink_sql": true,
-      "user": "qinhuan",
-      "table": "QINHUAN.SS_TEST"
+      "user": "USR_ODS",
+      "table": "USR_ODS.SS_TEST"
     }
   ]
 }
