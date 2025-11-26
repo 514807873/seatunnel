@@ -27,6 +27,8 @@ import org.apache.commons.collections4.CollectionUtils;
 import org.apache.seatunnel.api.table.type.*;
 import org.apache.seatunnel.common.exception.CommonErrorCodeDeprecated;
 import org.apache.seatunnel.transform.exception.TransformException;
+import org.apache.seatunnel.transform.sql.zeta.ZetaSQLFunction;
+import org.apache.seatunnel.transform.sql.zeta.ZetaUDF;
 
 import java.util.ArrayList;
 import java.util.Collection;
@@ -104,9 +106,9 @@ public class FlinkSQLType {
                 return filedTypeRes;
             }
         }
-//        if (expression instanceof Function) {
-//            return getFunctionType((Function) expression);
-//        }
+        if (expression instanceof Function) {
+            return getFunctionType((Function) expression);
+        }
 //        if (expression instanceof TimeKeyExpression) {
 //            return getTimeKeyExprType((TimeKeyExpression) expression);
 //        }
@@ -280,128 +282,129 @@ public class FlinkSQLType {
         }
     }
 
-//    private SeaTunnelDataType<?> getFunctionType(Function function) {
-//        switch (function.getName().toUpperCase()) {
-//            case ZetaSQLFunction.CHAR:
-//            case ZetaSQLFunction.CHR:
-//            case ZetaSQLFunction.CONCAT:
-//            case ZetaSQLFunction.CONCAT_WS:
-//            case ZetaSQLFunction.HEXTORAW:
-//            case ZetaSQLFunction.RAWTOHEX:
-//            case ZetaSQLFunction.INSERT:
-//            case ZetaSQLFunction.LOWER:
-//            case ZetaSQLFunction.LCASE:
-//            case ZetaSQLFunction.UPPER:
-//            case ZetaSQLFunction.UCASE:
-//            case ZetaSQLFunction.LEFT:
-//            case ZetaSQLFunction.RIGHT:
-//            case ZetaSQLFunction.LPAD:
-//            case ZetaSQLFunction.RPAD:
-//            case ZetaSQLFunction.LTRIM:
-//            case ZetaSQLFunction.RTRIM:
-//            case ZetaSQLFunction.TRIM:
-//            case ZetaSQLFunction.REGEXP_REPLACE:
-//            case ZetaSQLFunction.REGEXP_SUBSTR:
-//            case ZetaSQLFunction.REPEAT:
-//            case ZetaSQLFunction.REPLACE:
-//            case ZetaSQLFunction.SOUNDEX:
-//            case ZetaSQLFunction.SPACE:
-//            case ZetaSQLFunction.SUBSTRING:
-//            case ZetaSQLFunction.SUBSTR:
-//            case ZetaSQLFunction.TO_CHAR:
-//            case ZetaSQLFunction.TRANSLATE:
-//            case ZetaSQLFunction.DAYNAME:
-//            case ZetaSQLFunction.MONTHNAME:
-//            case ZetaSQLFunction.FORMATDATETIME:
-//            case ZetaSQLFunction.FROM_UNIXTIME:
-//                return BasicType.STRING_TYPE;
-//            case ZetaSQLFunction.ASCII:
-//            case ZetaSQLFunction.LOCATE:
-//            case ZetaSQLFunction.INSTR:
-//            case ZetaSQLFunction.POSITION:
-//            case ZetaSQLFunction.CEIL:
-//            case ZetaSQLFunction.CEILING:
-//            case ZetaSQLFunction.FLOOR:
-//            case ZetaSQLFunction.DAY_OF_MONTH:
-//            case ZetaSQLFunction.DAY_OF_WEEK:
-//            case ZetaSQLFunction.DAY_OF_YEAR:
-//            case ZetaSQLFunction.EXTRACT:
-//            case ZetaSQLFunction.HOUR:
-//            case ZetaSQLFunction.MINUTE:
-//            case ZetaSQLFunction.MONTH:
-//            case ZetaSQLFunction.QUARTER:
-//            case ZetaSQLFunction.SECOND:
-//            case ZetaSQLFunction.WEEK:
-//            case ZetaSQLFunction.YEAR:
-//            case ZetaSQLFunction.SIGN:
-//                return BasicType.INT_TYPE;
-//            case ZetaSQLFunction.BIT_LENGTH:
-//            case ZetaSQLFunction.CHAR_LENGTH:
-//            case ZetaSQLFunction.LENGTH:
-//            case ZetaSQLFunction.OCTET_LENGTH:
-//            case ZetaSQLFunction.DATEDIFF:
-//                return BasicType.LONG_TYPE;
-//            case ZetaSQLFunction.REGEXP_LIKE:
-//                return BasicType.BOOLEAN_TYPE;
-//            case ZetaSQLFunction.ACOS:
-//            case ZetaSQLFunction.ASIN:
-//            case ZetaSQLFunction.ATAN:
-//            case ZetaSQLFunction.COS:
-//            case ZetaSQLFunction.COSH:
-//            case ZetaSQLFunction.COT:
-//            case ZetaSQLFunction.SIN:
-//            case ZetaSQLFunction.SINH:
-//            case ZetaSQLFunction.TAN:
-//            case ZetaSQLFunction.TANH:
-//            case ZetaSQLFunction.ATAN2:
-//            case ZetaSQLFunction.EXP:
-//            case ZetaSQLFunction.LN:
-//            case ZetaSQLFunction.LOG:
-//            case ZetaSQLFunction.LOG10:
-//            case ZetaSQLFunction.RADIANS:
-//            case ZetaSQLFunction.SQRT:
-//            case ZetaSQLFunction.PI:
-//            case ZetaSQLFunction.POWER:
-//            case ZetaSQLFunction.RAND:
-//            case ZetaSQLFunction.RANDOM:
-//            case ZetaSQLFunction.TRUNC:
-//            case ZetaSQLFunction.TRUNCATE:
-//                return BasicType.DOUBLE_TYPE;
-//            case ZetaSQLFunction.NOW:
-//            case ZetaSQLFunction.DATE_TRUNC:
-//                return LocalTimeType.LOCAL_DATE_TIME_TYPE;
-//            case ZetaSQLFunction.PARSEDATETIME:
-//            case ZetaSQLFunction.TO_DATE:
-//                {
-//                    String format = function.getParameters().getExpressions().get(1).toString();
-//                    if (format.contains("yy") && format.contains("mm")) {
-//                        return LocalTimeType.LOCAL_DATE_TIME_TYPE;
-//                    }
-//                    if (format.contains("yy")) {
-//                        return LocalTimeType.LOCAL_DATE_TYPE;
-//                    }
-//                    if (format.contains("mm")) {
-//                        return LocalTimeType.LOCAL_TIME_TYPE;
-//                    }
-//                    throw new TransformException(
-//                            CommonErrorCodeDeprecated.UNSUPPORTED_OPERATION,
-//                            String.format(
-//                                    "Unknown pattern letter %s for function: %s",
-//                                    format, function.getName()));
-//                }
-//            case ZetaSQLFunction.ABS:
-//            case ZetaSQLFunction.DATEADD:
-//            case ZetaSQLFunction.TIMESTAMPADD:
-//            case ZetaSQLFunction.ROUND:
-//            case ZetaSQLFunction.NULLIF:
-//            case ZetaSQLFunction.COALESCE:
-//            case ZetaSQLFunction.IFNULL:
-//                // Result has the same type as first argument
-//                return getExpressionType(function.getParameters().getExpressions().get(0));
-//            case ZetaSQLFunction.MOD:
-//                // Result has the same type as second argument
-//                return getExpressionType(function.getParameters().getExpressions().get(1));
-//            default:
+    private SeaTunnelDataType<?> getFunctionType(Function function) {
+        switch (function.getName().toUpperCase()) {
+            case ZetaSQLFunction.CHAR:
+            case ZetaSQLFunction.CHR:
+            case ZetaSQLFunction.CONCAT:
+            case ZetaSQLFunction.CONCAT_WS:
+            case ZetaSQLFunction.HEXTORAW:
+            case ZetaSQLFunction.RAWTOHEX:
+            case ZetaSQLFunction.INSERT:
+            case ZetaSQLFunction.LOWER:
+            case ZetaSQLFunction.LCASE:
+            case ZetaSQLFunction.UPPER:
+            case ZetaSQLFunction.UCASE:
+            case ZetaSQLFunction.LEFT:
+            case ZetaSQLFunction.RIGHT:
+            case ZetaSQLFunction.LPAD:
+            case ZetaSQLFunction.RPAD:
+            case ZetaSQLFunction.LTRIM:
+            case ZetaSQLFunction.RTRIM:
+            case ZetaSQLFunction.TRIM:
+            case ZetaSQLFunction.REGEXP_REPLACE:
+            case ZetaSQLFunction.REGEXP_SUBSTR:
+            case ZetaSQLFunction.REPEAT:
+            case ZetaSQLFunction.REPLACE:
+            case ZetaSQLFunction.SOUNDEX:
+            case ZetaSQLFunction.SPACE:
+            case ZetaSQLFunction.SUBSTRING:
+            case ZetaSQLFunction.SUBSTR:
+            case ZetaSQLFunction.TO_CHAR:
+            case ZetaSQLFunction.TRANSLATE:
+            case ZetaSQLFunction.DAYNAME:
+            case ZetaSQLFunction.MONTHNAME:
+            case ZetaSQLFunction.FORMATDATETIME:
+            case ZetaSQLFunction.FROM_UNIXTIME:
+                return BasicType.STRING_TYPE;
+            case ZetaSQLFunction.ASCII:
+            case ZetaSQLFunction.LOCATE:
+            case ZetaSQLFunction.INSTR:
+            case ZetaSQLFunction.POSITION:
+            case ZetaSQLFunction.CEIL:
+            case ZetaSQLFunction.CEILING:
+            case ZetaSQLFunction.FLOOR:
+            case ZetaSQLFunction.DAY_OF_MONTH:
+            case ZetaSQLFunction.DAY_OF_WEEK:
+            case ZetaSQLFunction.DAY_OF_YEAR:
+            case ZetaSQLFunction.EXTRACT:
+            case ZetaSQLFunction.HOUR:
+            case ZetaSQLFunction.MINUTE:
+            case ZetaSQLFunction.MONTH:
+            case ZetaSQLFunction.QUARTER:
+            case ZetaSQLFunction.SECOND:
+            case ZetaSQLFunction.WEEK:
+            case ZetaSQLFunction.YEAR:
+            case ZetaSQLFunction.SIGN:
+                return BasicType.INT_TYPE;
+            case ZetaSQLFunction.BIT_LENGTH:
+            case ZetaSQLFunction.CHAR_LENGTH:
+            case ZetaSQLFunction.LENGTH:
+            case ZetaSQLFunction.OCTET_LENGTH:
+            case ZetaSQLFunction.DATEDIFF:
+            case "COUNT":
+                return BasicType.LONG_TYPE;
+            case ZetaSQLFunction.REGEXP_LIKE:
+                return BasicType.BOOLEAN_TYPE;
+            case ZetaSQLFunction.ACOS:
+            case ZetaSQLFunction.ASIN:
+            case ZetaSQLFunction.ATAN:
+            case ZetaSQLFunction.COS:
+            case ZetaSQLFunction.COSH:
+            case ZetaSQLFunction.COT:
+            case ZetaSQLFunction.SIN:
+            case ZetaSQLFunction.SINH:
+            case ZetaSQLFunction.TAN:
+            case ZetaSQLFunction.TANH:
+            case ZetaSQLFunction.ATAN2:
+            case ZetaSQLFunction.EXP:
+            case ZetaSQLFunction.LN:
+            case ZetaSQLFunction.LOG:
+            case ZetaSQLFunction.LOG10:
+            case ZetaSQLFunction.RADIANS:
+            case ZetaSQLFunction.SQRT:
+            case ZetaSQLFunction.PI:
+            case ZetaSQLFunction.POWER:
+            case ZetaSQLFunction.RAND:
+            case ZetaSQLFunction.RANDOM:
+            case ZetaSQLFunction.TRUNC:
+            case ZetaSQLFunction.TRUNCATE:
+                return BasicType.DOUBLE_TYPE;
+            case ZetaSQLFunction.NOW:
+            case ZetaSQLFunction.DATE_TRUNC:
+                return LocalTimeType.LOCAL_DATE_TIME_TYPE;
+            case ZetaSQLFunction.PARSEDATETIME:
+            case ZetaSQLFunction.TO_DATE:
+                {
+                    String format = function.getParameters().getExpressions().get(1).toString();
+                    if (format.contains("yy") && format.contains("mm")) {
+                        return LocalTimeType.LOCAL_DATE_TIME_TYPE;
+                    }
+                    if (format.contains("yy")) {
+                        return LocalTimeType.LOCAL_DATE_TYPE;
+                    }
+                    if (format.contains("mm")) {
+                        return LocalTimeType.LOCAL_TIME_TYPE;
+                    }
+                    throw new TransformException(
+                            CommonErrorCodeDeprecated.UNSUPPORTED_OPERATION,
+                            String.format(
+                                    "Unknown pattern letter %s for function: %s",
+                                    format, function.getName()));
+                }
+            case ZetaSQLFunction.ABS:
+            case ZetaSQLFunction.DATEADD:
+            case ZetaSQLFunction.TIMESTAMPADD:
+            case ZetaSQLFunction.ROUND:
+            case ZetaSQLFunction.NULLIF:
+            case ZetaSQLFunction.COALESCE:
+            case ZetaSQLFunction.IFNULL:
+                // Result has the same type as first argument
+                return getExpressionType(function.getParameters().getExpressions().get(0));
+            case ZetaSQLFunction.MOD:
+                // Result has the same type as second argument
+                return getExpressionType(function.getParameters().getExpressions().get(1));
+            default:
 //                for (ZetaUDF udf : udfList) {
 //                    if (udf.functionName().equalsIgnoreCase(function.getName())) {
 //                        List<SeaTunnelDataType<?>> argsType = new ArrayList<>();
@@ -417,11 +420,11 @@ public class FlinkSQLType {
 //                        return udf.resultType(argsType);
 //                    }
 //                }
-//                throw new TransformException(
-//                        CommonErrorCodeDeprecated.UNSUPPORTED_OPERATION,
-//                        String.format("Unsupported function: %s ", function.getName()));
-//        }
-//    }
+                throw new TransformException(
+                        CommonErrorCodeDeprecated.UNSUPPORTED_OPERATION,
+                        String.format("Unsupported function: %s ", function.getName()));
+        }
+    }
 
 //    private SeaTunnelDataType<?> getTimeKeyExprType(TimeKeyExpression timeKeyExpression) {
 //        switch (timeKeyExpression.getStringValue().toUpperCase()) {

@@ -24,7 +24,7 @@
         "xz",
         "xw"
       ],
-      "query": " select  `zybm`,`xyxh`,`dwbm`,`dwmc`,`zyxh`,`zymc`,`szyx`,`xz`,`xw` from  t_unknown_t_ykt_join001",
+      "query": " select  `zybm`,`xyxh`,`dwbm`,`dwmc`,`zyxh`,`zymc`,`szyx`,`xz`,`xw` from  t_unknown_t_ykt_join001 limit 4",
       "input_type": "table",
       "db_datasource_id": "1955537996418875393",
       "result_columns": [
@@ -189,49 +189,15 @@
     "result_table_name": "t2",
     "plugin_name": "Sql",
     "engine": "flink",
-    "query": "select dwmc, count(*) as sl from t1  group by dwmc"
+    "query": "select dwmc, count(*) as SL from t1  group by dwmc"
   }],
   "sink": [
     {
-      "db_type": "ORACLE",
-      "dbSchema": "USR_ODS",
-      "code_mapper": {},
-      "decode_mapper": {
-        "SZYX": "DECRYPT.RSA.1982715646141325313"
-      },
-      "db_datasource_id": "1953287455961489409",
       "source_table_name": [
         "t2"
       ],
-      "plugin_name": "XJJDBC",
-      "url": "jdbc:oracle:thin:@192.168.11.140:1521/XJCZPDB",
-      "password": "Xjcz#8[%psCbUL#z(EHJq#ods",
-      "driver": "oracle.jdbc.driver.OracleDriver",
-      "field_mapper": {
-        "dwmc": "DWMC",
-        "sl": "SL"
-      },
-      "user": "USR_ODS",
-      "table": "TEST_FLINK_GROUP",
-      "pre_config": {
-        "cleanTableWhenCompleteNoDataIn": true,
-        "recordOperate": false,
-        "dontCompare": false,
-        "zipperFlagValue": [
-          "I",
-          "U",
-          "D"
-        ],
-        "openDelete": true,
-        "autoTimestamp": false,
-        "insertMode": "complete",
-        "ignoreColumns": [],
-        "zipperColumns": [],
-        "zipperTableName": "",
-        "cleanTableWhenComplete": true,
-        "incrementMode": "update",
-        "preSql": ""
-      }
+      "plugin_name": "Console"
+
     }
   ]
 }

@@ -101,7 +101,7 @@ public class TransformExecuteProcessor
                 if ("SQL".equalsIgnoreCase(transform.getPluginName()) && pluginConfig.hasPath("engine")
                     && "FLINK".equalsIgnoreCase(pluginConfig.getString("engine"))) {
                     inputStream = joinStream(pluginConfig);
-                    registerResultTable(pluginConfig, inputStream);
+                    registerResultTable(pluginConfig, inputStream,false);
                     upstreamDataStreams.add(
                             new DataStreamTableInfo(
                                     inputStream,
@@ -113,7 +113,7 @@ public class TransformExecuteProcessor
                 else {
                     // TODO: 暂时取第一个元素
                     inputStream = flinkTransform(sourceType.get(0), transform, streamList.get(0).getDataStream());
-                    registerResultTable(pluginConfig, inputStream);
+                    registerResultTable(pluginConfig, inputStream,false);
                     upstreamDataStreams.add(
                             new DataStreamTableInfo(
                                     inputStream,

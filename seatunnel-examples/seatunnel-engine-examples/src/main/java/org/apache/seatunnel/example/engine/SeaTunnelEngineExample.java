@@ -31,7 +31,7 @@ public class SeaTunnelEngineExample {
 
     public static void main(String[] args)
             throws FileNotFoundException, URISyntaxException, CommandException {
-        String configurePath = args.length > 0 ? args[0] : "/examples/fake_to_console.conf";
+        String configurePath = args.length > 0 ? args[0] : "/examples/a6.json";
         String configFile = getTestConfigFile(configurePath);
         ClientCommandArgs clientCommandArgs = new ClientCommandArgs();
         clientCommandArgs.setConfigFile(configFile);
@@ -39,6 +39,7 @@ public class SeaTunnelEngineExample {
         clientCommandArgs.setJobName(Paths.get(configFile).getFileName().toString());
         // Change Execution Mode to CLUSTER to use client mode, before do this, you should start
         // SeaTunnelEngineServerExample
+        System.setProperty("HADOOP_USER_NAME", "hdfs");
         clientCommandArgs.setMasterType(MasterType.LOCAL);
         SeaTunnel.run(clientCommandArgs.buildCommand());
     }

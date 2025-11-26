@@ -61,7 +61,7 @@ public class ConsoleSinkWriter extends AbstractSinkWriter<SeaTunnelRow, Void>
         this.isPrintData = isPrintData;
         this.delayMs = delayMs;
         this.dataTypeChangeEventHandler = new DataTypeChangeEventDispatcher();
-        log.info("output rowType: {}", fieldsInfo(seaTunnelRowType));
+        log.info("output rowType:{}", fieldsInfo(seaTunnelRowType));
     }
 
     @Override
@@ -81,7 +81,8 @@ public class ConsoleSinkWriter extends AbstractSinkWriter<SeaTunnelRow, Void>
         }
         if (isPrintData) {
             log.info(
-                    "subtaskIndex={}  rowIndex={}:  SeaTunnelRow#tableId={} SeaTunnelRow#kind={} : {}",
+                    "subtaskIndex={}  rowIndex={}:  SeaTunnelRow#tableId={} SeaTunnelRow#kind={} : "
+                    + "-------------------> {}",
                     context.getIndexOfSubtask(),
                     rowCounter.incrementAndGet(),
                     element.getTableId(),
