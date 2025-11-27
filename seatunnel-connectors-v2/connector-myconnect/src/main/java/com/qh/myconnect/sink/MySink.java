@@ -57,6 +57,7 @@ public class MySink extends AbstractSimpleSink<SeaTunnelRow, Void> {
                 || jdbcSinkConfig.getDbType().equalsIgnoreCase("sqlserver")
                 || jdbcSinkConfig.getDbType().equalsIgnoreCase("trino")
                 || jdbcSinkConfig.getDbType().equalsIgnoreCase("dameng")
+                || jdbcSinkConfig.getDbType().equalsIgnoreCase("hexadb")
             ) {
                 this.tableCount =
                         jdbcDialect.getTableCount(

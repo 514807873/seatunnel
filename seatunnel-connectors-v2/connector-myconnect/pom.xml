@@ -58,6 +58,14 @@
         </dependency>
 
         <dependency>
+            <groupId>com.hexadb</groupId>
+            <artifactId>hexadb-jdbc</artifactId>
+            <scope>system</scope>
+            <version>3.0.0</version>
+            <systemPath>${project.basedir}/lib/hexadb-jdbc-3.0.0.jar</systemPath>
+        </dependency>
+
+        <dependency>
             <groupId>org.mongodb</groupId>
             <artifactId>mongodb-driver-sync</artifactId>
             <version>${mongo.driver.version}</version>
