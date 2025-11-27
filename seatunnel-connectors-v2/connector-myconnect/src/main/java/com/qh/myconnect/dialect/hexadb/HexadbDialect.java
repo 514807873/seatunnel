@@ -124,7 +124,7 @@ public class HexadbDialect implements JdbcDialect {
                 });
         String sql =
                 String.format(
-                        "select  %s from \"%s\".\"%s\" where 1=2 ",
+                        "select  %s from %s.%s where 1=2 ",
                         StringUtils.join(columns, ","), jdbcSourceConfig.getDbSchema(), table);
         PreparedStatement ps = conn.prepareStatement(sql);
         ps.executeQuery();
@@ -137,7 +137,7 @@ public class HexadbDialect implements JdbcDialect {
                 columnMappers.stream().filter(ColumnMapper::isUc).collect(Collectors.toList());
         String sqlQueryString =
                 " select <columns:{sub | \"<sub.sinkColumnName>\" }; separator=\", \"> "
-                + "  from \"<dbSchema>\".\"<table>\" a "
+                + "  from <dbSchema>.<table> a "
                 + " where  ";
         ST sqlQueryTemplate = new ST(sqlQueryString);
         sqlQueryTemplate.add("dbSchema", jdbcSinkConfig.getDbSchema());
@@ -169,9 +169,9 @@ public class HexadbDialect implements JdbcDialect {
                 columns.stream().map(x -> "\"" + x + "\"").collect(Collectors.toList());
         String sql =
                 "insert into "
-                + "\"" + jdbcSinkConfig.getDbSchema() + "\""
+                + jdbcSinkConfig.getDbSchema()
                 + "."
-                + "\"" + jdbcSinkConfig.getTable() + "\""
+                + jdbcSinkConfig.getTable()
                 + String.format("(%s)", StringUtils.join(newColumns, ","))
                 + String.format("values (%s)", StringUtils.join(values, ","));
         return sql;
@@ -206,9 +206,9 @@ public class HexadbDialect implements JdbcDialect {
                 columns.stream().map(x -> "\"" + x + "\"").collect(Collectors.toList());
         String sql =
                 "insert into "
-                + "\"" + jdbcSinkConfig.getDbSchema() + "\""
+                + jdbcSinkConfig.getDbSchema()
                 + "."
-                + "\"" + "XJ$_" + jdbcSinkConfig.getTable() + "\""
+                + "XJ$_" + jdbcSinkConfig.getTable()
                 + String.format("(%s)", StringUtils.join(newColumns, ","))
                 + String.format("values (%s)", StringUtils.join(values, ","));
         return sql;
@@ -216,11 +216,11 @@ public class HexadbDialect implements JdbcDialect {
 
     public String truncateTable(JdbcSinkConfig jdbcSinkConfig) {
         return String.format(
-                "truncate  table \"%s\".\"%s\"", jdbcSinkConfig.getDbSchema(), jdbcSinkConfig.getTable());
+                "truncate  table %s.%s", jdbcSinkConfig.getDbSchema(), jdbcSinkConfig.getTable());
     }
 
     public String dropTable(JdbcSinkConfig jdbcSinkConfig, String tableName) {
-        return String.format("drop table  \"%s\".\"%s\"", jdbcSinkConfig.getDbSchema(), tableName);
+        return String.format("drop table  %s.%s", jdbcSinkConfig.getDbSchema(), tableName);
     }
 
     public String copyTableOnlyColumn(
@@ -230,7 +230,7 @@ public class HexadbDialect implements JdbcDialect {
                         .map(x -> "\"" + x + "\"")
                         .collect(Collectors.toList());
         return format(
-                "create  table \"%s\".\"%s\" as select  * from \"%s\".\"%s\" where 1=2 ",
+                "create  table %s.%s as select  * from %s.%s where 1=2 ",
                 jdbcSinkConfig.getDbSchema(),
                 targetTable,
 //                StringUtils.join(collect, ','),
@@ -333,7 +333,7 @@ public class HexadbDialect implements JdbcDialect {
                         .map(x -> "\"" + x + "\"")
                         .collect(Collectors.toList());
         return String.format(
-                "CREATE UNIQUE INDEX \"%s\" ON \"%s\".\"%s\"(%s)",
+                "CREATE UNIQUE INDEX %s ON %s.\"%s\"(%s)",
                 "inx_" + tmpTableName,
                 jdbcSinkConfig.getDbSchema(),
                 tmpTableName,
