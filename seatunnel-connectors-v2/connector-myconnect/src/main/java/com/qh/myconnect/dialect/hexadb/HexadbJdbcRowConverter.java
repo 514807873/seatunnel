@@ -26,6 +26,6 @@ public class HexadbJdbcRowConverter extends AbstractJdbcRowConverter {
 
     @Override
     public String converterName() {
-        return "PostgreSQL";
+        return "HexaDb";
     }
 }

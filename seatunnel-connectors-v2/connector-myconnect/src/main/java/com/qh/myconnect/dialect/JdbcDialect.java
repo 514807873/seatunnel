@@ -289,7 +289,7 @@ public interface JdbcDialect extends Serializable {
         String columnName = jdbcSinkConfig.getPreConfig().getZipperColumns().get(2);
         String OPERATEFLAG = jdbcSinkConfig.getPreConfig().getZipperColumns().get(0);
         switch (jdbcSinkConfig.getDbType()) {
-            case "PGSQL":
+            case "HEXADB":
             case "MYSQL":
             case "SQLSERVER":
                 columnName = columnName.toLowerCase();
@@ -328,6 +328,7 @@ public interface JdbcDialect extends Serializable {
         String deleteFlagValue = jdbcSinkConfig.getPreConfig().getZipperFlagValue().get(2);
         switch (jdbcSinkConfig.getDbType()) {
             case "PGSQL":
+            case "HEXADB":
             case "MYSQL":
             case "SQLSERVER":
                 OPERATEFLAG = OPERATEFLAG.toLowerCase();
@@ -725,6 +726,7 @@ public interface JdbcDialect extends Serializable {
 
         switch (jdbcSinkConfig.getDbType()) {
             case "PGSQL":
+            case "HEXADB":
             case "MYSQL":
             case "SQLSERVER":
             case "TRINO":
@@ -877,6 +879,7 @@ public interface JdbcDialect extends Serializable {
 
         switch (jdbcSinkConfig.getDbType()) {
             case "PGSQL":
+            case "HEXADB":
             case "MYSQL":
             case "SQLSERVER":
                 OPERATEFLAG = OPERATEFLAG.toLowerCase();
@@ -1014,6 +1017,7 @@ public interface JdbcDialect extends Serializable {
         String deleteFlagValue = jdbcSinkConfig.getPreConfig().getZipperFlagValue().get(2);
         switch (jdbcSinkConfig.getDbType()) {
             case "PGSQL":
+            case "HEXADB":
             case "MYSQL":
             case "SQLSERVER":
                 OPERATEFLAG = OPERATEFLAG.toLowerCase();
@@ -1201,6 +1205,7 @@ public interface JdbcDialect extends Serializable {
         String deleteFlagValue = jdbcSinkConfig.getPreConfig().getZipperFlagValue().get(2);
         switch (jdbcSinkConfig.getDbType()) {
             case "PGSQL":
+            case "HEXADB":
             case "MYSQL":
             case "SQLSERVER":
                 OPERATETIME_END = OPERATETIME_END.toLowerCase();

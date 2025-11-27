@@ -53,7 +53,7 @@ public class HexadbDialect implements JdbcDialect {
 
     @Override
     public String dialectName() {
-        return "PostgreSQL";
+        return "HexaDb";
     }
 
     @Override

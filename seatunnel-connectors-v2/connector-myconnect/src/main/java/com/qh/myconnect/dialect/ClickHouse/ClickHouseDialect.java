@@ -390,6 +390,7 @@ public class ClickHouseDialect implements JdbcDialect {
         String currentTimeString = now.format(formatter);
         switch (jdbcSinkConfig.getDbType()) {
             case "PGSQL":
+            case "HEXADB":
             case "MYSQL":
             case "SQLSERVER":
                 OPERATEFLAG = OPERATEFLAG.toLowerCase();
@@ -494,6 +495,7 @@ public class ClickHouseDialect implements JdbcDialect {
         String currentTimeString = now.format(formatter);
         switch (jdbcSinkConfig.getDbType()) {
             case "PGSQL":
+            case "HEXADB":
             case "MYSQL":
             case "SQLSERVER":
                 OPERATEFLAG = OPERATEFLAG.toLowerCase();
