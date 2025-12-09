@@ -16,13 +16,14 @@
  */
 
 package org.apache.seatunnel.api.transform;
-
+import org.apache.seatunnel.api.common.GroupConcatQueryResult;
 import org.apache.seatunnel.api.common.PluginIdentifierInterface;
 import org.apache.seatunnel.api.source.SeaTunnelJobAware;
 import org.apache.seatunnel.api.table.catalog.CatalogTable;
 import org.apache.seatunnel.api.table.type.SeaTunnelDataType;
 
 import java.io.Serializable;
+import java.sql.ResultSet;
 import java.util.List;
 
 public interface SeaTunnelTransform<T>
@@ -55,6 +56,10 @@ public interface SeaTunnelTransform<T>
     T map(T row);
 
     default List<T> mapList(T row){
+        return null;
+    };
+
+    default GroupConcatQueryResult executeGroupConcatQuery(){
         return null;
     };
 

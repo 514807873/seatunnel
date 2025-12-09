@@ -17,8 +17,13 @@
 
 package org.apache.seatunnel.core.starter.flink.execution;
 
+import org.apache.flink.streaming.api.functions.KeyedProcessFunction;
+import org.apache.flink.streaming.api.functions.ProcessFunction;
 import org.apache.flink.table.api.Table;
 import org.apache.flink.table.api.bridge.java.StreamTableEnvironment;
+import org.apache.flink.util.Collector;
+import org.apache.seatunnel.api.common.GroupConcatQueryResult;
+import org.apache.seatunnel.api.table.type.RowKind;
 import org.apache.seatunnel.shade.com.typesafe.config.Config;
 
 import org.apache.seatunnel.api.common.JobContext;
@@ -41,6 +46,8 @@ import org.apache.flink.streaming.api.datastream.DataStream;
 import org.apache.flink.types.Row;
 
 import java.net.URL;
+import java.sql.ResultSet;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -101,7 +108,7 @@ public class TransformExecuteProcessor
                 if ("SQL".equalsIgnoreCase(transform.getPluginName()) && pluginConfig.hasPath("engine")
                     && "FLINK".equalsIgnoreCase(pluginConfig.getString("engine"))) {
                     inputStream = joinStream(pluginConfig);
-                    registerResultTable(pluginConfig, inputStream,false);
+                    registerResultTable(pluginConfig, inputStream, false);
                     upstreamDataStreams.add(
                             new DataStreamTableInfo(
                                     inputStream,
@@ -113,7 +120,7 @@ public class TransformExecuteProcessor
                 else {
                     // TODO: 暂时取第一个元素
                     inputStream = flinkTransform(sourceType.get(0), transform, streamList.get(0).getDataStream());
-                    registerResultTable(pluginConfig, inputStream,false);
+                    registerResultTable(pluginConfig, inputStream, false);
                     upstreamDataStreams.add(
                             new DataStreamTableInfo(
                                     inputStream,
@@ -135,6 +142,9 @@ public class TransformExecuteProcessor
 
     protected DataStream<Row> flinkTransform(
             SeaTunnelRowType sourceType, SeaTunnelTransform transform, DataStream<Row> stream) {
+        if (transform.getPluginName().equalsIgnoreCase("GroupConcat")) {
+            return flinkTransformGroupConcat(sourceType, transform, stream);
+        }
         TypeInformation rowTypeInfo =
                 TypeConverterUtils.convert(
                         transform.getProducedCatalogTable().getSeaTunnelRowType());
@@ -147,7 +157,9 @@ public class TransformExecuteProcessor
                                 (value, out) -> {
                                     SeaTunnelRow seaTunnelRow =
                                             transformInputRowConverter.reconvert(value);
-                                    if (transform.getPluginName().equalsIgnoreCase("http_transform")) {
+                                    if (transform.getPluginName().equalsIgnoreCase("http_transform") ||
+                                        transform.getPluginName().equalsIgnoreCase("SplitColumnValue")
+                                    ) {
                                         List<SeaTunnelRow> list = transform.mapList(seaTunnelRow);
                                         if (!list.isEmpty()) {
                                             for (SeaTunnelRow dataRow : list) {
@@ -159,7 +171,7 @@ public class TransformExecuteProcessor
                                     else {
                                         SeaTunnelRow dataRow =
                                                 (SeaTunnelRow) transform.map(seaTunnelRow);
-                                        if (dataRow != null ) {
+                                        if (dataRow != null) {
                                             Row copy = transformOutputRowConverter.convert(dataRow);
                                             out.collect(copy);
                                         }
@@ -168,6 +180,87 @@ public class TransformExecuteProcessor
                                 },
                         rowTypeInfo);
         return output;
+    }
+
+    protected DataStream<Row> flinkTransformGroupConcat(
+            SeaTunnelRowType sourceType, SeaTunnelTransform transform, DataStream<Row> stream) {
+        TypeInformation rowTypeInfo =
+                TypeConverterUtils.convert(
+                        transform.getProducedCatalogTable().getSeaTunnelRowType());
+        FlinkRowConverter transformInputRowConverter = new FlinkRowConverter(sourceType);
+        FlinkRowConverter transformOutputRowConverter =
+                new FlinkRowConverter(transform.getProducedCatalogTable().getSeaTunnelRowType());
+
+        // 使用窗口处理 GroupConcat
+        DataStream<Row> output = stream
+                .keyBy(r -> 1) // 使用固定的key，将所有数据分到同一组
+                .process(
+                        new GroupConcatWindowProcessFunction(transform, transformInputRowConverter, transformOutputRowConverter),
+                        rowTypeInfo
+                );
+
+        return output;
+    }
+
+    private static class GroupConcatWindowProcessFunction extends KeyedProcessFunction<Integer, Row, Row> {
+        private final SeaTunnelTransform transform;
+        private final FlinkRowConverter inputConverter;
+        private final FlinkRowConverter outputConverter;
+        private List<Row> bufferedInputs = new ArrayList<>();
+
+        public GroupConcatWindowProcessFunction(
+                SeaTunnelTransform transform,
+                FlinkRowConverter inputConverter,
+                FlinkRowConverter outputConverter) {
+            this.transform = transform;
+            this.inputConverter = inputConverter;
+            this.outputConverter = outputConverter;
+        }
+
+        @Override
+        public void open(org.apache.flink.configuration.Configuration parameters) throws Exception {
+            super.open(parameters);
+            transform.open();
+        }
+
+        @Override
+        public void processElement(Row value, Context ctx, Collector<Row> out) throws Exception {
+            SeaTunnelRow seaTunnelRow = inputConverter.reconvert(value);
+
+            // 调用 mapList 将数据插入 SQLite
+            transform.mapList(seaTunnelRow);
+            bufferedInputs.add(value);
+
+            // 注册定时器，在数据流结束时触发
+            ctx.timerService().registerEventTimeTimer(Long.MAX_VALUE - 1);
+        }
+
+        @Override
+        public void onTimer(long timestamp, OnTimerContext ctx, Collector<Row> out) throws Exception {
+            if (timestamp == Long.MAX_VALUE - 1) {
+                try (GroupConcatQueryResult queryResult = transform.executeGroupConcatQuery()) {
+                    ResultSet resultSet = queryResult.getResultSet();
+                    int columnCount = resultSet.getMetaData().getColumnCount();
+                    while (resultSet.next()) {
+                        Object[] newFields = new Object[columnCount];
+                        for (int i = 1; i <= newFields.length; i++) {
+                            Object value = resultSet.getObject(i);
+                            newFields[i - 1] = value;
+                        }
+                        SeaTunnelRow newRow = new SeaTunnelRow(newFields);
+                        newRow.setRowKind(RowKind.INSERT);
+                        Row outputRow = outputConverter.convert(newRow);
+                        out.collect(outputRow);
+                    }
+                }
+            }
+        }
+
+        @Override
+        public void close() throws Exception {
+            super.close();
+            transform.close();
+        }
     }
 
     protected DataStream<Row> joinStream(Config pluginConfig) {

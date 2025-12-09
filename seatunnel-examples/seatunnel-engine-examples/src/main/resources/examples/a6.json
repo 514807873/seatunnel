@@ -187,9 +187,7 @@
       "t1"
     ],
     "result_table_name": "t2",
-    "plugin_name": "Sql",
-    "engine": "flink",
-    "query": "select dwmc, count(*) as SL from t1  group by dwmc"
+    "plugin_name": "SplitColumnValue"
   }],
   "sink": [
     {
