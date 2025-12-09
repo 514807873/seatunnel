@@ -253,7 +253,7 @@ public class GroupConcatTransform extends AbstractCatalogSupportTransform {
 
     @Override
     public String getPluginName() {
-        return "c";
+        return "GroupConcat";
     }
 
     @Override
