@@ -1,0 +1,161 @@
+{
+  "env": {
+    "ignoreEmptySource": true,
+    "job.mode": "BATCH",
+    "isRecordErrorData": 1,
+    "execution.parallelism": 1,
+    "maxRecordNumber": 100,
+    "job.name": "flinksql"
+  },
+  "source": [
+    {
+      "db_type": "ORACLE",
+      "dbSchema": "USR_ODS",
+      "columns": [
+        "DWMC",
+        "ZYMC",
+        "DWMC_NEW",
+        "ZYMC_NEW"
+      ],
+      "query": "select \"DWMC\",\"ZYMC\",\"DWMC_NEW\",\"ZYMC_NEW\" from \"USR_ODS\".\"TEST_SPLIT\"",
+      "input_type": "table",
+      "db_datasource_id": "1953287455961489409",
+      "result_columns": [
+        {
+          "schema": "USR_ODS",
+          "fullAlias": "DWMC",
+          "nullable": true,
+          "typeName": "VARCHAR2",
+          "type": "VARCHAR2",
+          "hasQuality": false,
+          "decimalDigit": 0,
+          "size": 255,
+          "autoincrement": false,
+          "name": "DWMC",
+          "table": "TEST_SPLIT",
+          "order": 1,
+          "primaryKey": false,
+          "sourceColumn": "1953287455961489409.USR_ODS.TEST_SPLIT.DWMC"
+        },
+        {
+          "schema": "USR_ODS",
+          "fullAlias": "ZYMC",
+          "nullable": true,
+          "typeName": "VARCHAR2",
+          "type": "VARCHAR2",
+          "hasQuality": false,
+          "decimalDigit": 0,
+          "size": 255,
+          "autoincrement": false,
+          "name": "ZYMC",
+          "table": "TEST_SPLIT",
+          "order": 2,
+          "primaryKey": false,
+          "sourceColumn": "1953287455961489409.USR_ODS.TEST_SPLIT.ZYMC"
+        },
+        {
+          "schema": "USR_ODS",
+          "fullAlias": "(新单位名称)DWMC_NEW",
+          "nullable": true,
+          "typeName": "VARCHAR2",
+          "remark": "新单位名称",
+          "type": "VARCHAR2",
+          "hasQuality": false,
+          "decimalDigit": 0,
+          "size": 255,
+          "autoincrement": false,
+          "name": "DWMC_NEW",
+          "table": "TEST_SPLIT",
+          "finalAlias": "新单位名称",
+          "order": 3,
+          "primaryKey": false,
+          "sourceColumn": "1953287455961489409.USR_ODS.TEST_SPLIT.DWMC_NEW"
+        },
+        {
+          "schema": "USR_ODS",
+          "fullAlias": "(新专业名称)ZYMC_NEW",
+          "nullable": true,
+          "typeName": "VARCHAR2",
+          "remark": "新专业名称",
+          "type": "VARCHAR2",
+          "hasQuality": false,
+          "decimalDigit": 0,
+          "size": 255,
+          "autoincrement": false,
+          "name": "ZYMC_NEW",
+          "table": "TEST_SPLIT",
+          "finalAlias": "新专业名称",
+          "order": 4,
+          "primaryKey": false,
+          "sourceColumn": "1953287455961489409.USR_ODS.TEST_SPLIT.ZYMC_NEW"
+        }
+      ],
+      "result_table_name": "t1",
+      "plugin_name": "JDBC",
+      "table_name": "TEST_SPLIT",
+      "url": "jdbc:oracle:thin:@192.168.11.140:1521/XJCZPDB?connectTimeout=10000",
+      "bindPars": [],
+      "password": "Xjcz#8[%psCbUL#z(EHJq#ods",
+      "database": "XJCZPDB",
+      "driver": "oracle.jdbc.driver.OracleDriver",
+      "user": "USR_ODS"
+    }
+  ],
+  "transform": [
+    {
+      "engine": "flink",
+      "query": "select count(1) as sl from t1 ",
+      "result_columns": [
+        {
+          "name": "sl",
+          "type": "number"
+        }
+      ],
+      "source_table_name": [
+        "t1"
+      ],
+      "result_table_name": "t3",
+      "plugin_name": "Sql"
+    }
+  ],
+  "sink": [
+    {
+      "db_type": "ORACLE",
+      "dbSchema": "USR_ADS",
+      "code_mapper": {},
+      "decode_mapper": {},
+      "db_datasource_id": "1958805362252890114",
+      "source_table_name": [
+        "t3"
+      ],
+      "plugin_name": "XJJDBC",
+      "url": "jdbc:oracle:thin:@192.168.11.140:1521/XJCZPDB",
+      "password": "Xjcz#8[%psCbUL#z(EHJq#ads",
+      "driver": "oracle.jdbc.driver.OracleDriver",
+      "field_mapper": {
+        "sl": "SL"
+      },
+      "user": "USR_ADS",
+      "table": "FLINK_SQL",
+      "pre_config": {
+        "cleanTableWhenCompleteNoDataIn": true,
+        "recordOperate": false,
+        "dontCompare": false,
+        "zipperFlagValue": [
+          "I",
+          "U",
+          "D"
+        ],
+        "openDelete": true,
+        "autoTimestamp": false,
+        "insertMode": "complete",
+        "ignoreColumns": [],
+        "zipperColumns": [],
+        "zipperTableName": "",
+        "cleanTableWhenComplete": true,
+        "incrementMode": "update",
+        "preSql": ""
+      }
+    }
+  ]
+}

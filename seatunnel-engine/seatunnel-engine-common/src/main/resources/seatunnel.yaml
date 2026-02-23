@@ -17,6 +17,10 @@
 
 seatunnel:
     engine:
+        event-report-http:
+            url: "http://pangu-seatunnel:8872/SeaTunnelJob/flinkCallBack2"
+            headers:
+                Content-Type: application/json
         backup-count: 1
         queue-type: blockingqueue
         print-execution-info-interval: 60
@@ -26,7 +30,7 @@ seatunnel:
             interval: 300000
             timeout: 10000
             storage:
-                type: hdfs
+                type: localfile
                 max-retained: 3
                 plugin-config:
                     namespace: /tmp/seatunnel/checkpoint_snapshot/

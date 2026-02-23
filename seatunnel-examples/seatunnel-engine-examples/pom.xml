@@ -29,6 +29,7 @@
 
     <properties>
         <hadoop3.version>3.1.4</hadoop3.version>
+        <oracle.version>19.8.0.0</oracle.version>
     </properties>
 
     <dependencies>
@@ -61,6 +62,21 @@
             <groupId>com.clickhouse</groupId>
             <artifactId>clickhouse-jdbc</artifactId>
             <version>0.3.2-patch11</version>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.seatunnel</groupId>
+            <artifactId>connector-myconnect</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>com.oracle.database.jdbc</groupId>
+            <artifactId>ojdbc8</artifactId>
+            <version>${oracle.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>com.oracle.database.nls</groupId>
+            <artifactId>orai18n</artifactId>
+            <version>${oracle.version}</version>
         </dependency>
 
         <dependency>
