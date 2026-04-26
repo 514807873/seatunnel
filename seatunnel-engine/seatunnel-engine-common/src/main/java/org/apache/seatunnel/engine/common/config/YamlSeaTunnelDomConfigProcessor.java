@@ -149,18 +149,14 @@ public class YamlSeaTunnelDomConfigProcessor extends AbstractDomConfigProcessor 
             } else if (ServerConfigOptions.CLASSLOADER_CACHE_MODE.key().equals(name)) {
                 engineConfig.setClassloaderCacheMode(getBooleanValue(getTextContent(node)));
             } else if (ServerConfigOptions.EVENT_REPORT_HTTP.equalsIgnoreCase(name)) {
-                NamedNodeMap attributes = node.getAttributes();
-                Node urlNode = attributes.getNamedItem(ServerConfigOptions.EVENT_REPORT_HTTP_URL);
-                if (urlNode != null) {
-                    engineConfig.setEventReportHttpApi(getTextContent(urlNode));
-                    Node headersNode =
-                            attributes.getNamedItem(ServerConfigOptions.EVENT_REPORT_HTTP_HEADERS);
-                    if (headersNode != null) {
+                for (Node childNode : childElements(node)) {
+                    String childName = cleanNodeName(childNode);
+                    if (ServerConfigOptions.EVENT_REPORT_HTTP_URL.equals(childName)) {
+                        engineConfig.setEventReportHttpApi(getTextContent(childNode));
+                    } else if (ServerConfigOptions.EVENT_REPORT_HTTP_HEADERS.equals(childName)) {
                         Map<String, String> headers = new LinkedHashMap<>();
-                        NodeList nodeList = headersNode.getChildNodes();
-                        for (int i = 0; i < nodeList.getLength(); i++) {
-                            Node item = nodeList.item(i);
-                            headers.put(cleanNodeName(item), getTextContent(item));
+                        for (Node headerNode : childElements(childNode)) {
+                            headers.put(cleanNodeName(headerNode), getTextContent(headerNode));
                         }
                         engineConfig.setEventReportHttpHeaders(headers);
                     }

@@ -66,6 +66,7 @@ public class ClickHouseTypeMapper implements JdbcDialectTypeMapper {
     private static final String CLICKHOUSE_INT16 = "INT16";
     private static final String CLICKHOUSE_INT32 = "INT32";
     private static final String CLICKHOUSE_INT64 = "INT64";
+    private static final String CLICKHOUSE_INT128 = "INT128";
     private static final String CLICKHOUSE_FLOAT64 = "FLOAT64";
     private static final String CLICKHOUSE_FLOAT32= "FLOAT32";
 
@@ -144,6 +145,7 @@ public class ClickHouseTypeMapper implements JdbcDialectTypeMapper {
             case CLICKHOUSE_INT16:
             case CLICKHOUSE_INT32:
             case CLICKHOUSE_INT64:
+            case CLICKHOUSE_INT128:
             case CLICKHOUSE_UINT_NULLABLE:
             case CLICKHOUSE_UINT8_NULLABLE:
             case CLICKHOUSE_UINT16_NULLABLE:
