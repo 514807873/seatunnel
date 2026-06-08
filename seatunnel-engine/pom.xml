@@ -33,6 +33,7 @@
         <module>seatunnel-engine-storage</module>
         <module>seatunnel-engine-serializer</module>
         <module>seatunnel-engine-ui</module>
+        <module>seatunnel-clickhouse-log-appender</module>
     </modules>
 
     <properties>
