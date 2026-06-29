@@ -29,10 +29,22 @@ public class ClickHouseDialect implements JdbcDialect {
     }
 
     @Override
-    public Optional<String> getUpsertStatement(String database, String tableName, String[] fieldNames, String[] uniqueKeyFields) {
+    public Optional<String> getUpsertStatement(
+            String database, String tableName, String[] fieldNames, String[] uniqueKeyFields) {
         return Optional.empty();
     }
 
+    @Override
+    public String quoteIdentifier(String identifier) {
+        return "`" + identifier + "`";
+    }
+
+    @Override
+    public String quoteDatabaseIdentifier(String identifier) {
+        return "`" + identifier + "`";
+    }
+
+    @Override
     public String getUpdateStatement(
             String database,
             String tableName,
@@ -44,18 +56,13 @@ public class ClickHouseDialect implements JdbcDialect {
                         .filter(
                                 fieldName ->
                                         isPrimaryKeyUpdated
-                                        || !Arrays.asList(conditionFields)
-                                                .contains(fieldName))
+                                                || !Arrays.asList(conditionFields)
+                                                        .contains(fieldName))
                         .toArray(String[]::new);
 
-        Set<String> set1 = new HashSet<>(Arrays.asList(fieldNames));
-        Set<String> set2 = new HashSet<>(Arrays.asList(conditionFields));
-
-        // 差集
-        Set<String> difference = new HashSet<>(set1);
-        difference.removeAll(set2);
+        Set<String> difference = new HashSet<>(Arrays.asList(fieldNames));
+        difference.removeAll(new HashSet<>(Arrays.asList(conditionFields)));
         String[] newFieldNames = difference.toArray(new String[0]);
-
 
         String setClause =
                 Arrays.stream(newFieldNames)
@@ -66,8 +73,18 @@ public class ClickHouseDialect implements JdbcDialect {
                         .map(fieldName -> format("%s = :%s", quoteIdentifier(fieldName), fieldName))
                         .collect(Collectors.joining(" AND "));
         return String.format(
-                "UPDATE %s SET %s WHERE %s",
+                "ALTER TABLE %s UPDATE %s WHERE %s settings mutations_sync = 1",
                 tableIdentifier(database, tableName), setClause, conditionClause);
     }
 
+    @Override
+    public String getDeleteStatement(String database, String tableName, String[] conditionFields) {
+        String conditionClause =
+                Arrays.stream(conditionFields)
+                        .map(fieldName -> format("%s = :%s", quoteIdentifier(fieldName), fieldName))
+                        .collect(Collectors.joining(" AND "));
+        return String.format(
+                "ALTER TABLE %s DELETE WHERE %s settings mutations_sync = 1",
+                tableIdentifier(database, tableName), conditionClause);
+    }
 }

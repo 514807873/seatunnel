@@ -33,7 +33,7 @@
         <mongo.driver.version>4.7.1</mongo.driver.version>
         <sqlserver.version>9.2.1.jre8</sqlserver.version>
         <oracle.version>12.2.0.1</oracle.version>
-        <clickhouse.version>0.3.2-patch11</clickhouse.version>
+        <clickhouse.version>0.9.8</clickhouse.version>
     </properties>
 
     <dependencies>
@@ -121,7 +121,6 @@
 <!--            <groupId>com.clickhouse</groupId>-->
 <!--            <artifactId>clickhouse-jdbc</artifactId>-->
 <!--            <version>${clickhouse.version}</version>-->
-<!--            <scope>provided</scope>-->
 <!--        </dependency>-->
 
         <dependency>

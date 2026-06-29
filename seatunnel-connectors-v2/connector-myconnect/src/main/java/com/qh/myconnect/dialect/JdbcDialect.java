@@ -558,7 +558,7 @@ public interface JdbcDialect extends Serializable {
         return String.format("truncate  table %s", jdbcSinkConfig.getTable());
     }
 
-    default String truncateTable(JdbcSinkConfig jdbcSinkConfig,String tableName) {
+    default String truncateTable(JdbcSinkConfig jdbcSinkConfig, String tableName) {
         return String.format("truncate  table %s", tableName);
     }
 
@@ -614,7 +614,9 @@ public interface JdbcDialect extends Serializable {
             preparedStatement = connection.prepareStatement(template.render());
             preparedStatement.executeUpdate();
             preparedStatement.close();
-            connection.commit();
+            if (!(this instanceof ClickHouseDialect)) {
+                connection.commit();
+            }
         } catch (SQLException e) {
             throw new RuntimeException(e);
         }
@@ -659,7 +661,9 @@ public interface JdbcDialect extends Serializable {
             preparedStatement = connection.prepareStatement(template.render());
             log.info("覆盖插入前执行的删除语句:" + template.render());
             del = preparedStatement.executeUpdate();
-            connection.commit();
+            if (!(this instanceof ClickHouseDialect)) {
+                connection.commit();
+            }
             preparedStatement.close();
         } catch (SQLException e) {
             throw new RuntimeException(e);
@@ -1287,7 +1291,7 @@ public interface JdbcDialect extends Serializable {
                 }
             }
             psUpsert.executeBatch();
-            conn.commit();
+            if (!(this instanceof ClickHouseDialect)) conn.commit();
             psUpsert.clearBatch();
             psUpsert.close();
             isInsert = true;
@@ -1297,7 +1301,9 @@ public interface JdbcDialect extends Serializable {
                 assert psUpsert != null;
                 psUpsert.clearBatch();
                 psUpsert.close();
-                conn.rollback();
+                if (!(this instanceof ClickHouseDialect)) {
+                    conn.rollback();
+                }
                 midCount.setInsertCount(tmpInsertCount);
             } catch (SQLException ex) {
                 log.error("insertToDb方法,异常:" + sql + ExceptionUtils.getStackTrace(ex));
@@ -1342,12 +1348,16 @@ public interface JdbcDialect extends Serializable {
                     try {
                         psUpsert.addBatch();
                         psUpsert.executeBatch();
-                        conn.commit();
+                        if (!(this instanceof ClickHouseDialect)) {
+                            conn.commit();
+                        }
                         psUpsert.clearBatch();
                         psUpsert.close();
                         midCount.setInsertCount(midCount.getInsertCount() + 1);
                     } catch (SQLException ee) {
-                        conn.rollback();
+                        if(!(this instanceof ClickHouseDialect)){
+                            conn.rollback();
+                        }
                         psUpsert.clearBatch();
                         psUpsert.close();
                         midCount.setErrorCount(midCount.getErrorCount() + 1);
@@ -1384,7 +1394,7 @@ public interface JdbcDialect extends Serializable {
         String currentTimeString = this.currentTimeString(conn, jdbcSinkConfig.getDbSchema(),
                 jdbcSinkConfig.getTable(), jdbcSinkConfig.getPreConfig().getAutoTimestampColumnName());
         String autoTimestampColumnName = jdbcSinkConfig.getPreConfig().getAutoTimestampColumnName();
-        String sql = "update %s set " + autoTimestampColumnName + "=%s where "+ autoTimestampColumnName + " is null";
+        String sql = "update %s set " + autoTimestampColumnName + "=%s where " + autoTimestampColumnName + " is null";
         if (StringUtils.isNoneBlank(jdbcSinkConfig.getDbSchema())) {
             sql = String.format(sql, jdbcSinkConfig.getDbSchema() + "." + jdbcSinkConfig.getTable(), currentTimeString);
         }

@@ -102,9 +102,7 @@ public class MySinkWriterZipper extends AbstractSinkWriter<SeaTunnelRow, Void> {
                 throw new RuntimeException("Failed to set session", e);
             }
         }
-        else {
-            this.conn.setAutoCommit(false);
-        }
+        else this.conn.setAutoCommit(jdbcDialect instanceof ClickHouseDialect);
         if (jdbcDialect instanceof TrinoDialect) {
             isTrino = true;
             try (Statement statement = conn.createStatement()) {
@@ -126,7 +124,7 @@ public class MySinkWriterZipper extends AbstractSinkWriter<SeaTunnelRow, Void> {
             metaDataHash.put(metaData.getColumnName(i + 1), metaData.getColumnTypeName(i + 1));
         }
         this.metaDataHash = metaDataHash;
-        if (!isTrino) {
+        if (!isTrino && !(jdbcDialect instanceof ClickHouseDialect)) {
             conn.commit();
         }
     }
@@ -314,6 +312,11 @@ public class MySinkWriterZipper extends AbstractSinkWriter<SeaTunnelRow, Void> {
                 }
             }
         }
+        ResultSetMetaData sinkMetaData = this.jdbcDialect.getResultSetMetaData(conn, jdbcSinkConfig);
+        Map<String, String> sinkColumnDbTypes = new HashMap<>();
+        for (int i = 0; i < sinkMetaData.getColumnCount(); i++) {
+            sinkColumnDbTypes.put(sinkMetaData.getColumnName(i + 1).toLowerCase(), sinkMetaData.getColumnTypeName(i + 1));
+        }
         fieldMapper.forEach((sourceColumnName, targetColumnName) -> {
             CodeConverter converter = new CodeConverter();
             if (codeMapper != null) {
@@ -340,18 +343,7 @@ public class MySinkWriterZipper extends AbstractSinkWriter<SeaTunnelRow, Void> {
                     columnMapper.setUc(true);
                 }
             }
-            try {
-                ResultSetMetaData metaData = this.jdbcDialect.getResultSetMetaData(conn, jdbcSinkConfig);
-                for (int i = 0; i < metaData.getColumnCount(); i++) {
-                    String columnName = metaData.getColumnName(i + 1);
-                    if (targetColumnName.equalsIgnoreCase(columnName)) {
-                        String columnTypeName = metaData.getColumnTypeName(i + 1);
-                        columnMapper.setSinkColumnDbType(columnTypeName);
-                    }
-                }
-            } catch (SQLException e) {
-                throw new RuntimeException(e);
-            }
+            columnMapper.setSinkColumnDbType(sinkColumnDbTypes.get(targetColumnName.toLowerCase()));
             if (codeMapper != null) {
                 String safeCode = codeMapper.get(targetColumnName) == null ? codeMapper.get(sourceColumnName) : codeMapper.get(targetColumnName);
                 if (safeCode != null && StringUtils.isNoneBlank(safeCode)) {

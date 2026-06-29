@@ -1,0 +1,154 @@
+{
+  "env": {
+    "ignoreEmptySource": true,
+    "job.mode": "STREAMING",
+    "isRecordErrorData": 0,
+    "execution.parallelism": 1,
+    "maxRecordNumber": 0,
+    "job.name": "test111",
+    "checkpoint.interval": 5000
+  },
+  "source": [
+    {
+      "db_type": "PGSQL",
+      "dbSchema": "usr_ods",
+      "primary_keys": [],
+      "query": "select\n\tapp_id lcslid,\n\trwid rwid,\n\tsubject rwbt,\n\tform_url rwbddzpc,\n\tform_mobile_url rwbddzyd,\n\tstatus rwztm,\n\tcreated_on cjsj,\n\tend_on wcsj\nfrom\n\tusr_ods.test111",
+      "db_datasource_id": "1828974205372051458",
+      "result_columns": [
+        {
+          "sourceColumnName": "app_id",
+          "decimalDigit": 0,
+          "sourceTableName": "test111",
+          "size": 2147483647,
+          "name": "lcslid",
+          "sourceDbName": "pg-dwd1",
+          "type": "text",
+          "sourceColumn": "1828974205372051458.usr_ods.test111.app_id"
+        },
+        {
+          "sourceColumnName": "rwid",
+          "decimalDigit": 0,
+          "sourceTableName": "test111",
+          "size": 2000,
+          "name": "rwid",
+          "sourceDbName": "pg-dwd1",
+          "type": "varchar",
+          "sourceColumn": "1828974205372051458.usr_ods.test111.rwid"
+        },
+        {
+          "sourceColumnName": "subject",
+          "decimalDigit": 0,
+          "sourceTableName": "test111",
+          "size": 2000,
+          "name": "rwbt",
+          "sourceDbName": "pg-dwd1",
+          "type": "varchar",
+          "sourceColumn": "1828974205372051458.usr_ods.test111.subject"
+        },
+        {
+          "sourceColumnName": "form_url",
+          "decimalDigit": 0,
+          "sourceTableName": "test111",
+          "size": 3999,
+          "name": "rwbddzpc",
+          "sourceDbName": "pg-dwd1",
+          "type": "varchar",
+          "sourceColumn": "1828974205372051458.usr_ods.test111.form_url"
+        },
+        {
+          "sourceColumnName": "form_mobile_url",
+          "decimalDigit": 0,
+          "sourceTableName": "test111",
+          "size": 3999,
+          "name": "rwbddzyd",
+          "sourceDbName": "pg-dwd1",
+          "type": "varchar",
+          "sourceColumn": "1828974205372051458.usr_ods.test111.form_mobile_url"
+        },
+        {
+          "sourceColumnName": "status",
+          "decimalDigit": 0,
+          "sourceTableName": "test111",
+          "size": 2000,
+          "name": "rwztm",
+          "sourceDbName": "pg-dwd1",
+          "type": "varchar",
+          "sourceColumn": "1828974205372051458.usr_ods.test111.status"
+        },
+        {
+          "sourceColumnName": "created_on",
+          "decimalDigit": 6,
+          "sourceTableName": "test111",
+          "size": 29,
+          "name": "cjsj",
+          "sourceDbName": "pg-dwd1",
+          "type": "timestamp",
+          "sourceColumn": "1828974205372051458.usr_ods.test111.created_on"
+        },
+        {
+          "sourceColumnName": "end_on",
+          "decimalDigit": 6,
+          "sourceTableName": "test111",
+          "size": 29,
+          "name": "wcsj",
+          "sourceDbName": "pg-dwd1",
+          "type": "timestamp",
+          "sourceColumn": "1828974205372051458.usr_ods.test111.end_on"
+        }
+      ],
+      "result_table_name": "t1",
+      "plugin_name": "SqlCdc",
+      "openDelete": false,
+      "url": "jdbc:postgresql://192.168.9.146:5432/usr_ods_db?sslmode=disable&channelBinding=disable",
+      "password": "usr_ods#20231024",
+      "database": "usr_ods_db",
+      "driver": "org.postgresql.Driver",
+      "user": "usr_ods"
+    }
+  ],
+  "transform": [],
+  "sink": [
+    {
+      "db_type": "PGSQL",
+      "dbSchema": "usr_ods",
+      "primary_keys": [
+        "lcslid",
+        "rwid"
+      ],
+      "db_datasource_id": "1828974205372051458",
+      "recordOperation": true,
+      "source_table_name": [
+        "t1"
+      ],
+      "plugin_name": "JDBC",
+      "url": "jdbc:postgresql://192.168.9.146:5432/usr_ods_db?sslmode=disable&channelBinding=disable",
+      "value_mapper": {
+        "0": "lcslid",
+        "1": "rwid",
+        "2": "rwbt",
+        "3": "rwbddzpc",
+        "4": "rwbddzyd",
+        "5": "rwztm",
+        "6": "cjsj",
+        "7": "wcsj"
+      },
+      "database": "usr_ods_db",
+      "password": "usr_ods#20231024",
+      "driver": "org.postgresql.Driver",
+      "field_mapper": {
+        "rwztm": "rwztm",
+        "cjsj": "cjsj",
+        "rwbt": "rwbt",
+        "wcsj": "wcsj",
+        "rwid": "rwid",
+        "rwbddzpc": "rwbddzpc",
+        "rwbddzyd": "rwbddzyd",
+        "lcslid": "lcslid"
+      },
+      "generate_sink_sql": true,
+      "user": "usr_ods",
+      "table": "usr_ods.t_bg1328_dbrwxx"
+    }
+  ]
+}

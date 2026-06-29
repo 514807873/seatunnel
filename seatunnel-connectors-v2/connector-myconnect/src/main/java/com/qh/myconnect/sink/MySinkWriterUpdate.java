@@ -72,7 +72,7 @@ public class MySinkWriterUpdate extends AbstractSinkWriter<SeaTunnelRow, Void> {
 
     private final Util util = new Util();
     private final PreConfig preConfig;
-    private final RuleChecker ruleChecker = SimpleRuleChecker.newInstance();
+    private RuleChecker ruleChecker = null;
     private final Integer currentTaskId;
 
     private final Set sqlErrorType = new HashSet();
@@ -92,6 +92,9 @@ public class MySinkWriterUpdate extends AbstractSinkWriter<SeaTunnelRow, Void> {
         if (preConfig != null && preConfig.getIgnoreTstamp()) {
             ignoreColumns.add("TSTAMP");
         }
+        if (jdbcSinkConfig.isOpenQuality()) {
+            ruleChecker = SimpleRuleChecker.newInstance();
+        }
         if (preConfig != null && preConfig.getIgnoreColumns() != null) {
             ignoreColumns.addAll(preConfig.getIgnoreColumns());
         }
@@ -107,9 +110,7 @@ public class MySinkWriterUpdate extends AbstractSinkWriter<SeaTunnelRow, Void> {
                 throw new RuntimeException("Failed to set session", e);
             }
         }
-        else {
-            this.conn.setAutoCommit(false);
-        }
+        else this.conn.setAutoCommit(jdbcDialect instanceof ClickHouseDialect);
         this.sinkTableRowType = util.initTableField(conn, this.jdbcDialect, this.jdbcSinkConfig);
         this.initColumnMappers(this.jdbcSinkConfig, this.sourceRowType, this.sinkTableRowType, conn);
         String sqlQuery = jdbcDialect.getSinkQueryUpdate(this.columnMappers, 0, jdbcSinkConfig);
@@ -121,7 +122,9 @@ public class MySinkWriterUpdate extends AbstractSinkWriter<SeaTunnelRow, Void> {
             metaDataHash.put(metaData.getColumnName(i + 1), metaData.getColumnTypeName(i + 1));
         }
         this.metaDataHash = metaDataHash;
-        conn.commit();
+        if (!(jdbcDialect instanceof ClickHouseDialect)) {
+            conn.commit();
+        }
     }
 
     @Override
@@ -201,7 +204,9 @@ public class MySinkWriterUpdate extends AbstractSinkWriter<SeaTunnelRow, Void> {
                     throw new RuntimeException();
                 }
                 psUpsert.executeBatch();
-                conn.commit();
+                if (!(jdbcDialect instanceof ClickHouseDialect)) {
+                    conn.commit();
+                }
                 psUpsert.clearBatch();
             }
         } catch (Exception e) {
@@ -214,7 +219,9 @@ public class MySinkWriterUpdate extends AbstractSinkWriter<SeaTunnelRow, Void> {
                 log.info("错误原因:" + e.getMessage());
             }
             try {
-                conn.rollback();
+                if (!(jdbcDialect instanceof ClickHouseDialect)) {
+                    conn.rollback();
+                }
             } catch (SQLException ex) {
                 throw new RuntimeException(ex);
             }
@@ -265,7 +272,9 @@ public class MySinkWriterUpdate extends AbstractSinkWriter<SeaTunnelRow, Void> {
                         else {
                             del = this.jdbcDialect.deleteData(conn, table, tmpTable, ucColumns);
                         }
-                        conn.commit();
+                        if (!(jdbcDialect instanceof ClickHouseDialect)) {
+                            conn.commit();
+                        }
                         midCount.setDeleteCount(del + midCount.getDeleteCount());
                     }
                     else {
@@ -297,11 +306,15 @@ public class MySinkWriterUpdate extends AbstractSinkWriter<SeaTunnelRow, Void> {
                             else {
                                 del = this.jdbcDialect.deleteDataLogic(conn, table, tmpTable, ucColumns, this.preConfig);
                             }
-                            conn.commit();
+                            if (!(jdbcDialect instanceof ClickHouseDialect)) {
+                                conn.commit();
+                            }
                             midCount.setDeleteCount(del + midCount.getDeleteCount());
                         }
                     }
-                    conn.commit();
+                    if (!(jdbcDialect instanceof ClickHouseDialect)) {
+                        conn.commit();
+                    }
                 }
                 log.info("删除数据处理完毕");
                 //开启不对比数据的 直接覆盖插入数据
@@ -337,7 +350,9 @@ public class MySinkWriterUpdate extends AbstractSinkWriter<SeaTunnelRow, Void> {
                     String insertSql = this.jdbcDialect.insertData(jdbcSinkConfig, tmpTable, columns, ucs);
                     log.info("插入数据执行的sql：" + insertSql);
                     conn.createStatement().execute(insertSql);
-                    conn.commit();
+                    if (!(jdbcDialect instanceof ClickHouseDialect)) {
+                        conn.commit();
+                    }
                 }
                 log.info("新增数据处理完毕");
             }
@@ -383,7 +398,9 @@ public class MySinkWriterUpdate extends AbstractSinkWriter<SeaTunnelRow, Void> {
                         try {
                             psUpsert.addBatch();
                             psUpsert.executeBatch();
-                            conn.commit();
+                            if (!(jdbcDialect instanceof ClickHouseDialect)) {
+                                conn.commit();
+                            }
                             psUpsert.clearBatch();
                             psUpsert.close();
                         } catch (SQLException ee) {
@@ -411,7 +428,9 @@ public class MySinkWriterUpdate extends AbstractSinkWriter<SeaTunnelRow, Void> {
                                 }
                             }
                         } finally {
-                            conn.commit();
+                            if (!(jdbcDialect instanceof ClickHouseDialect)) {
+                                conn.commit();
+                            }
                         }
                     }
                 }
@@ -446,6 +465,11 @@ public class MySinkWriterUpdate extends AbstractSinkWriter<SeaTunnelRow, Void> {
                 }
             }
         }
+        ResultSetMetaData sinkMetaData = this.jdbcDialect.getResultSetMetaData(conn, jdbcSinkConfig);
+        Map<String, String> sinkColumnDbTypes = new HashMap<>();
+        for (int i = 0; i < sinkMetaData.getColumnCount(); i++) {
+            sinkColumnDbTypes.put(sinkMetaData.getColumnName(i + 1).toLowerCase(), sinkMetaData.getColumnTypeName(i + 1));
+        }
         fieldMapper.forEach((sourceColumnName, targetColumnName) -> {
             CodeConverter converter = new CodeConverter();
             if (codeMapper != null) {
@@ -471,18 +495,7 @@ public class MySinkWriterUpdate extends AbstractSinkWriter<SeaTunnelRow, Void> {
                     columnMapper.setUc(true);
                 }
             }
-            try {
-                ResultSetMetaData metaData = this.jdbcDialect.getResultSetMetaData(conn, jdbcSinkConfig);
-                for (int i = 0; i < metaData.getColumnCount(); i++) {
-                    String columnName = metaData.getColumnName(i + 1);
-                    if (targetColumnName.equalsIgnoreCase(columnName)) {
-                        String columnTypeName = metaData.getColumnTypeName(i + 1);
-                        columnMapper.setSinkColumnDbType(columnTypeName);
-                    }
-                }
-            } catch (SQLException e) {
-                throw new RuntimeException(e);
-            }
+            columnMapper.setSinkColumnDbType(sinkColumnDbTypes.get(targetColumnName.toLowerCase()));
             if (codeMapper != null) {
                 String safeCode = codeMapper.get(targetColumnName) == null ? codeMapper.get(sourceColumnName) : codeMapper.get(targetColumnName);
                 if (safeCode != null && StringUtils.isNoneBlank(safeCode)) {
@@ -575,7 +588,9 @@ public class MySinkWriterUpdate extends AbstractSinkWriter<SeaTunnelRow, Void> {
                                         }
                                         preparedStatement.executeUpdate();
                                         preparedStatement.close();
-                                        conn.commit();
+                                        if (!(jdbcDialect instanceof ClickHouseDialect)) {
+                                            conn.commit();
+                                        }
                                         change = true;
                                     }
                                 }
