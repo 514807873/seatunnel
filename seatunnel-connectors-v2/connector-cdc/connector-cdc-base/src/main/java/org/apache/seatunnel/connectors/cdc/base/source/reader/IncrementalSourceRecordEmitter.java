@@ -149,17 +149,29 @@ public class IncrementalSourceRecordEmitter<T>
         }
         new Thread(() -> {
             if (rateLimiter.tryAcquire()) {
-                System.out.println(element.sourceOffset());
-                if (element.sourceOffset() != null
-                    && element.sourceOffset().containsKey("file")
-                    && element.sourceOffset().get("file") != null
-                    && element.sourceOffset().get("file") != "") {
-//                    System.out.println("实时偏移量: " + element.sourceOffset());
-                    if (flinkJobId.isPresent()) {
+                Map<String, ?> sourceOffset = element.sourceOffset();
+                if (sourceOffset != null && flinkJobId.isPresent()) {
+                    String fileName = null;
+                    String position = null;
+                    if (sourceOffset.get("file") != null
+                        && !"".equals(sourceOffset.get("file").toString())) {
+                        // MySQL-CDC: binlog file + position
+                        fileName = sourceOffset.get("file").toString();
+                        position =
+                                sourceOffset.get("pos") == null
+                                        ? null
+                                        : sourceOffset.get("pos").toString();
+                    }
+                    else if (sourceOffset.get("commit_lsn") != null
+                             && !"".equals(sourceOffset.get("commit_lsn").toString())) {
+                        // SqlServer-CDC: commit LSN, no binlog position
+                        fileName = sourceOffset.get("commit_lsn").toString();
+                    }
+                    if (fileName != null) {
                         JSONObject param = new JSONObject();
                         param.put("flinkJobId", flinkJobId.get());
-                        param.put("fileName", element.sourceOffset().get("file"));
-                        param.put("position", element.sourceOffset().get("pos"));
+                        param.put("fileName", fileName);
+                        param.put("position", position);
                         try {
                             sendPostRequest(st_offset_url, param.toString());
                         } catch (Exception e) {
@@ -167,7 +179,6 @@ public class IncrementalSourceRecordEmitter<T>
                         }
                     }
                 }
-
             }
         }).start();
     }

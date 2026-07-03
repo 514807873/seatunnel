@@ -74,7 +74,7 @@ public class SqlServerIncrementalSourceFactory implements TableSourceFactory {
                 .conditional(
                         SqlServerSourceOptions.STARTUP_MODE,
                         StartupMode.SPECIFIC,
-                        SourceOptions.STARTUP_SPECIFIC_OFFSET_POS)
+                        SourceOptions.STARTUP_SPECIFIC_OFFSET_FILE)
                 .conditional(
                         SqlServerSourceOptions.STOP_MODE,
                         StopMode.SPECIFIC,

@@ -1,0 +1,17 @@
+﻿[INFO] Scanning for projects...
+[INFO] 
+[INFO] -----< org.apache.seatunnel:seatunnel-flink-connector-v2-example >------
+[INFO] Building SeaTunnel : Examples : Flink Connector V2 2.3.5
+[INFO]   from pom.xml
+[INFO] --------------------------------[ jar ]---------------------------------
+[WARNING] The POM for org.apache.seatunnel:connector-myconnect:jar:2.3.5 is invalid, transitive dependencies (if any) will not be available, enable debug logging for more details
+[WARNING] The artifact mysql:mysql-connector-java:jar:8.0.32 has been relocated to com.mysql:mysql-connector-j:jar:8.0.32: MySQL Connector/J artifacts moved to reverse-DNS compliant Maven 2+ coordinates.
+[INFO] 
+[INFO] --- dependency:3.1.1:tree (default-cli) @ seatunnel-flink-connector-v2-example ---
+[INFO] Skipping plugin execution
+[INFO] ------------------------------------------------------------------------
+[INFO] BUILD SUCCESS
+[INFO] ------------------------------------------------------------------------
+[INFO] Total time:  1.712 s
+[INFO] Finished at: 2026-06-30T14:55:02+08:00
+[INFO] ------------------------------------------------------------------------

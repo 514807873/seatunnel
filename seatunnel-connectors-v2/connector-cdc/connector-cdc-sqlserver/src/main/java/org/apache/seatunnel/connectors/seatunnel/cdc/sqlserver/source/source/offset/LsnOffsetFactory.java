@@ -67,8 +67,10 @@ public class LsnOffsetFactory extends OffsetFactory {
 
     @Override
     public Offset specific(String filename, Long position) {
-        throw new UnsupportedOperationException(
-                "not supported create new Offset by filename and position.");
+        // SqlServer-CDC has no binlog file/position, the startup offset is a single commit LSN.
+        // The LSN string is carried by the "filename" argument
+        // (startup.specific-offset.file), position is ignored.
+        return LsnOffset.valueOf(filename);
     }
 
     @Override
