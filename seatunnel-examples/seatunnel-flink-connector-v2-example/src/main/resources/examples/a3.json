@@ -1,0 +1,152 @@
+{
+  "env": {
+    "job.mode": "STREAMING",
+    "isRecordErrorData": 0,
+    "execution.parallelism": 1,
+    "maxRecordNumber": 0,
+    "job.name": "希嘉云端侵入式实时同步测试任务",
+    "checkpoint.interval": 5000
+  },
+  "source": [
+    {
+      "db_type": "MYSQL",
+      "base-url": "jdbc:mysql://111.172.106.210:60173/DB_SOURCE?useUnicode=yes&characterEncoding=UTF-8&useSSL=false&serverTimezone=UTC&zeroDateTimeBehavior=convertToNull&tinyInt1isBit=false",
+      "password": "XIJIAgreat2020!$",
+      "startup.mode": "initial",
+      "query": "select * from DB_SOURCE.score_src",
+      "table-names": [
+        "DB_SOURCE.score_src"
+      ],
+      "db_datasource_id": "1900021691394740225",
+      "result_columns": [
+        {
+          "fullAlias": "ID",
+          "nullable": false,
+          "typeName": "INT",
+          "isPrimaryKey": true,
+          "remark": "",
+          "type": "INT",
+          "database": "DB_SOURCE",
+          "decimalDigit": 0,
+          "size": 4,
+          "autoincrement": true,
+          "name": "ID",
+          "table": "score_src",
+          "order": 1,
+          "primaryKey": true,
+          "sourceColumn": "1900021691394740225..score_src.ID"
+        },
+        {
+          "fullAlias": "SNO",
+          "nullable": true,
+          "typeName": "CHAR",
+          "isPrimaryKey": false,
+          "remark": "",
+          "type": "CHAR",
+          "database": "DB_SOURCE",
+          "decimalDigit": 0,
+          "size": 255,
+          "autoincrement": false,
+          "name": "SNO",
+          "table": "score_src",
+          "order": 2,
+          "primaryKey": false,
+          "sourceColumn": "1900021691394740225..score_src.SNO"
+        },
+        {
+          "fullAlias": "COURSE",
+          "nullable": true,
+          "typeName": "CHAR",
+          "isPrimaryKey": false,
+          "remark": "",
+          "type": "CHAR",
+          "database": "DB_SOURCE",
+          "decimalDigit": 0,
+          "size": 255,
+          "autoincrement": false,
+          "name": "COURSE",
+          "table": "score_src",
+          "order": 3,
+          "primaryKey": false,
+          "sourceColumn": "1900021691394740225..score_src.COURSE"
+        },
+        {
+          "fullAlias": "SCORE",
+          "nullable": true,
+          "typeName": "CHAR",
+          "isPrimaryKey": false,
+          "remark": "",
+          "type": "CHAR",
+          "database": "DB_SOURCE",
+          "decimalDigit": 0,
+          "size": 255,
+          "autoincrement": false,
+          "name": "SCORE",
+          "table": "score_src",
+          "order": 4,
+          "primaryKey": false,
+          "sourceColumn": "1900021691394740225..score_src.SCORE"
+        },
+        {
+          "fullAlias": "BDATE",
+          "nullable": true,
+          "defaultValue": "CURRENT_TIMESTAMP(3)",
+          "typeName": "TIMESTAMP",
+          "isPrimaryKey": false,
+          "remark": "",
+          "type": "TIMESTAMP",
+          "database": "DB_SOURCE",
+          "decimalDigit": 0,
+          "size": 26,
+          "autoincrement": false,
+          "name": "BDATE",
+          "table": "score_src",
+          "order": 5,
+          "primaryKey": false,
+          "sourceColumn": "1900021691394740225..score_src.BDATE"
+        }
+      ],
+      "result_table_name": "t1",
+      "plugin_name": "MySQL-CDC",
+      "user": "root",
+      "username": "root"
+    }
+  ],
+  "transform": [],
+  "sink": [
+    {
+      "db_type": "CLICKHOUSE",
+      "dbSchema": "",
+      "primary_keys": [
+        "ID"
+      ],
+      "code_mapper": {},
+      "db_datasource_id": "1823249620522811394",
+      "source_table_name": [
+        "t1"
+      ],
+      "plugin_name": "JDBC",
+      "url": "jdbc:clickhouse://172.17.3.70:8123,172.17.3.71:8123,172.17.3.69:8123/USR_ODS_DB?socket_timeout=60000",
+      "value_mapper": {
+        "0": "ID",
+        "1": "SNO",
+        "2": "COURSE",
+        "3": "SCORE",
+        "4": "BDATE"
+      },
+      "database": "USR_ODS_DB",
+      "password": "Xjcz#qwe20200720#ods",
+      "driver": "com.clickhouse.jdbc.ClickHouseDriver",
+      "field_mapper": {
+        "BDATE": "BDATE",
+        "SCORE": "SCORE",
+        "SNO": "SNO",
+        "ID": "ID",
+        "COURSE": "COURSE"
+      },
+      "generate_sink_sql": true,
+      "user": "usr_ods",
+      "table": "t_sstbcsxt_score_src"
+    }
+  ]
+}

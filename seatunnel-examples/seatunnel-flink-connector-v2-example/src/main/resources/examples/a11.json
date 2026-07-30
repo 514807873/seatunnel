@@ -1,0 +1,130 @@
+{
+  "env": {
+    "ignoreEmptySource": true,
+    "job.mode": "STREAMING",
+    "isRecordErrorData": 0,
+    "execution.parallelism": 1,
+    "maxRecordNumber": 0,
+    "job.name": "sql-cdc",
+    "checkpoint.interval": 5000
+  },
+  "source": [
+    {
+      "db_type": "ORACLE",
+      "dbSchema": "USR_ODS",
+      "primary_keys": [
+        "ID"
+      ],
+      "query": "select * from IP_INFOS where id<=100",
+      "db_datasource_id": "1953287455961489409",
+      "result_columns": [
+        {
+          "sourceColumnName": "ID",
+          "decimalDigit": 0,
+          "sourceTableName": "IP_INFOS",
+          "size": 255,
+          "name": "ID",
+          "sourceDbName": "oracle新连接_ODS",
+          "type": "VARCHAR2",
+          "sourceColumn": "1953287455961489409.USR_ODS.ip_infos.id"
+        },
+        {
+          "sourceColumnName": "START_IP",
+          "decimalDigit": 0,
+          "sourceTableName": "IP_INFOS",
+          "size": 306,
+          "name": "START_IP",
+          "sourceDbName": "oracle新连接_ODS",
+          "type": "VARCHAR2",
+          "sourceColumn": "1953287455961489409.USR_ODS.ip_infos.start_ip"
+        },
+        {
+          "sourceColumnName": "START_IP_INT",
+          "decimalDigit": 0,
+          "sourceTableName": "IP_INFOS",
+          "size": 306,
+          "name": "START_IP_INT",
+          "sourceDbName": "oracle新连接_ODS",
+          "type": "VARCHAR2",
+          "sourceColumn": "1953287455961489409.USR_ODS.ip_infos.start_ip_int"
+        },
+        {
+          "sourceColumnName": "END_IP",
+          "decimalDigit": 0,
+          "sourceTableName": "IP_INFOS",
+          "size": 306,
+          "name": "END_IP",
+          "sourceDbName": "oracle新连接_ODS",
+          "type": "VARCHAR2",
+          "sourceColumn": "1953287455961489409.USR_ODS.ip_infos.end_ip"
+        },
+        {
+          "sourceColumnName": "END_IP_INT",
+          "decimalDigit": 0,
+          "sourceTableName": "IP_INFOS",
+          "size": 306,
+          "name": "END_IP_INT",
+          "sourceDbName": "oracle新连接_ODS",
+          "type": "VARCHAR2",
+          "sourceColumn": "1953287455961489409.USR_ODS.ip_infos.end_ip_int"
+        },
+        {
+          "sourceColumnName": "ADDRESS",
+          "decimalDigit": 0,
+          "sourceTableName": "IP_INFOS",
+          "size": 600,
+          "name": "ADDRESS",
+          "sourceDbName": "oracle新连接_ODS",
+          "type": "VARCHAR2",
+          "sourceColumn": "1953287455961489409.USR_ODS.ip_infos.address"
+        }
+      ],
+      "result_table_name": "t1",
+      "plugin_name": "SqlCdc",
+      "openDelete": true,
+      "url": "jdbc:oracle:thin:@192.168.11.140:1521/XJCZPDB?oracle.jdbc.timezoneAsRegion=false",
+      "password": "Xjcz#8[%psCbUL#z(EHJq#ods",
+      "database": "XJCZPDB",
+      "driver": "oracle.jdbc.driver.OracleDriver",
+      "user": "USR_ODS"
+    }
+  ],
+  "transform": [],
+  "sink": [
+    {
+      "db_type": "ORACLE",
+      "dbSchema": "USR_DWD",
+      "primary_keys": [
+        "ID"
+      ],
+      "db_datasource_id": "1953643139563495425",
+      "source_table_name": [
+        "t1"
+      ],
+      "plugin_name": "JDBC",
+      "url": "jdbc:oracle:thin:@192.168.11.140:1521/XJCZPDB",
+      "value_mapper": {
+        "0": "ID",
+        "1": "START_IP",
+        "2": "START_IP_INT",
+        "3": "END_IP",
+        "4": "END_IP_INT",
+        "5": "ADDRESS"
+      },
+      "database": "XJCZPDB",
+      "password": "Xjcz#8[%psCbUL#z(EHJq#dwd",
+      "driver": "oracle.jdbc.driver.OracleDriver",
+      "field_mapper": {
+        "END_IP_INT": "END_IP_INT",
+        "END_IP": "END_IP",
+        "START_IP": "START_IP",
+        "ADDRESS": "ADDRESS",
+        "START_IP_INT": "START_IP_INT",
+        "ID": "ID"
+      },
+      "generate_sink_sql": true,
+      "user": "USR_DWD",
+      "table": "USR_DWD.IP_INFOS"
+    }
+  ]
+}

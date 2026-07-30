@@ -18,21 +18,35 @@
 package org.apache.seatunnel.core.starter.flink.execution;
 
 import org.apache.seatunnel.shade.com.typesafe.config.Config;
+import org.apache.seatunnel.shade.com.typesafe.config.ConfigValueFactory;
 
 import org.apache.seatunnel.api.common.JobContext;
 import org.apache.seatunnel.api.configuration.ReadonlyConfig;
+import org.apache.seatunnel.api.table.catalog.CatalogTable;
+import org.apache.seatunnel.api.table.type.SeaTunnelRow;
+import org.apache.seatunnel.api.table.type.SeaTunnelRowType;
 import org.apache.seatunnel.common.utils.ReflectionUtils;
 import org.apache.seatunnel.common.utils.SeaTunnelException;
 import org.apache.seatunnel.core.starter.execution.PluginExecuteProcessor;
+import org.apache.seatunnel.core.starter.flink.utils.FlinkTableRowBridge;
+
+import org.apache.flink.streaming.api.datastream.DataStream;
+import org.apache.flink.types.Row;
 
 import java.lang.reflect.Method;
 import java.net.URL;
 import java.net.URLClassLoader;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.function.BiConsumer;
+import java.util.stream.Collectors;
 
 import static org.apache.seatunnel.api.options.ConnectorCommonOptions.PLUGIN_INPUT;
+import static org.apache.seatunnel.api.options.ConnectorCommonOptions.PLUGIN_OUTPUT;
 
 public abstract class FlinkAbstractPluginExecuteProcessor<T>
         implements PluginExecuteProcessor<DataStreamTableInfo, FlinkRuntimeEnvironment> {
@@ -74,6 +88,7 @@ public abstract class FlinkAbstractPluginExecuteProcessor<T>
     protected final List<T> plugins;
     protected final Config envConfig;
     protected final ClassLoader classLoader = Thread.currentThread().getContextClassLoader();
+    protected final Map<String, Boolean> isAppendStreamMap = new HashMap<>();
 
     protected FlinkAbstractPluginExecuteProcessor(
             List<URL> jarPaths,
@@ -97,28 +112,88 @@ public abstract class FlinkAbstractPluginExecuteProcessor<T>
 
         if (readonlyConfig.getOptional(PLUGIN_INPUT).isPresent()) {
             List<String> pluginInputIdentifiers = readonlyConfig.get(PLUGIN_INPUT);
-            if (pluginInputIdentifiers.size() > 1) {
-                throw new UnsupportedOperationException(
-                        "Multiple input tables are not supported in flink plugin");
+            if (pluginInputIdentifiers.size() == 1) {
+                String tableName = pluginInputIdentifiers.get(0);
+                DataStreamTableInfo dataStreamTableInfo =
+                        upstreamDataStreams.stream()
+                                .filter(info -> tableName.equals(info.getTableName()))
+                                .findFirst()
+                                .orElseThrow(
+                                        () ->
+                                                new SeaTunnelException(
+                                                        String.format(
+                                                                "table %s not found", tableName)));
+                return Optional.of(
+                        new DataStreamTableInfo(
+                                dataStreamTableInfo.getDataStream(),
+                                dataStreamTableInfo.getCatalogTables(),
+                                tableName));
             }
-
-            String tableName = pluginInputIdentifiers.get(0);
-            DataStreamTableInfo dataStreamTableInfo =
-                    upstreamDataStreams.stream()
-                            .filter(info -> tableName.equals(info.getTableName()))
-                            .findFirst()
-                            .orElseThrow(
-                                    () ->
-                                            new SeaTunnelException(
-                                                    String.format(
-                                                            "table %s not found", tableName)));
+            // Multi-table input for Flink SQL JOIN: merge catalog tables, keep first stream
+            List<CatalogTable> catalogTables = new ArrayList<>();
+            DataStream<SeaTunnelRow> firstStream = null;
+            for (String tableName : pluginInputIdentifiers) {
+                DataStreamTableInfo info =
+                        upstreamDataStreams.stream()
+                                .filter(item -> tableName.equals(item.getTableName()))
+                                .findFirst()
+                                .orElseThrow(
+                                        () ->
+                                                new SeaTunnelException(
+                                                        String.format(
+                                                                "table %s not found", tableName)));
+                catalogTables.addAll(info.getCatalogTables());
+                if (firstStream == null) {
+                    firstStream = info.getDataStream();
+                }
+            }
             return Optional.of(
                     new DataStreamTableInfo(
-                            dataStreamTableInfo.getDataStream(),
-                            dataStreamTableInfo.getCatalogTables(),
-                            tableName));
+                            firstStream, catalogTables, pluginInputIdentifiers.get(0)));
         }
         return Optional.empty();
+    }
+
+    protected void registerSeaTunnelResultTable(
+            Config pluginConfig,
+            DataStream<SeaTunnelRow> dataStream,
+            List<CatalogTable> catalogTables) {
+        registerSeaTunnelResultTable(pluginConfig, dataStream, catalogTables, true);
+    }
+
+    protected void registerSeaTunnelResultTable(
+            Config pluginConfig,
+            DataStream<SeaTunnelRow> dataStream,
+            List<CatalogTable> catalogTables,
+            boolean isAppend) {
+        ReadonlyConfig readonlyConfig = ReadonlyConfig.fromConfig(pluginConfig);
+        if (!readonlyConfig.getOptional(PLUGIN_OUTPUT).isPresent()) {
+            return;
+        }
+        String resultTable = readonlyConfig.get(PLUGIN_OUTPUT);
+        SeaTunnelRowType rowType = catalogTables.get(0).getSeaTunnelRowType();
+        DataStream<Row> rowStream = FlinkTableRowBridge.toFlinkRowStream(dataStream, rowType);
+        Config configWithFields =
+                pluginConfig.withValue(
+                        "field_name",
+                        ConfigValueFactory.fromAnyRef(
+                                Arrays.stream(rowType.getFieldNames())
+                                        .collect(Collectors.joining(","))));
+        flinkRuntimeEnvironment.registerResultTable(
+                configWithFields, rowStream, resultTable, isAppend);
+        isAppendStreamMap.put(resultTable, isAppend);
+    }
+
+    protected void registerResultTable(
+            Config pluginConfig, DataStream<Row> dataStream, boolean isAppend) {
+        ReadonlyConfig readonlyConfig = ReadonlyConfig.fromConfig(pluginConfig);
+        if (!readonlyConfig.getOptional(PLUGIN_OUTPUT).isPresent()) {
+            return;
+        }
+        String resultTable = readonlyConfig.get(PLUGIN_OUTPUT);
+        flinkRuntimeEnvironment.registerResultTable(
+                pluginConfig, dataStream, resultTable, isAppend);
+        isAppendStreamMap.put(resultTable, isAppend);
     }
 
     protected abstract List<T> initializePlugins(

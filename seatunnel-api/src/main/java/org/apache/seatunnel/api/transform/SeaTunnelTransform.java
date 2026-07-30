@@ -17,6 +17,7 @@
 
 package org.apache.seatunnel.api.transform;
 
+import org.apache.seatunnel.api.common.GroupConcatQueryResult;
 import org.apache.seatunnel.api.common.PluginIdentifierInterface;
 import org.apache.seatunnel.api.source.SeaTunnelJobAware;
 import org.apache.seatunnel.api.table.catalog.CatalogTable;
@@ -31,6 +32,9 @@ public interface SeaTunnelTransform<T>
 
     /** call it when Transformer initialed */
     default void open() {}
+
+    /** Inject Flink/Spark subtask index for logging or diagnostics. Default no-op. */
+    default void setSubtaskIndex(int subtaskIndex) {}
 
     /**
      * Set the data type info of input data.
@@ -50,6 +54,14 @@ public interface SeaTunnelTransform<T>
 
     default SchemaChangeEvent mapSchemaChangeEvent(SchemaChangeEvent schemaChangeEvent) {
         return schemaChangeEvent;
+    }
+
+    default List<T> mapList(T row) {
+        return null;
+    }
+
+    default GroupConcatQueryResult executeGroupConcatQuery() {
+        return null;
     }
 
     /** call it when Transformer completed */

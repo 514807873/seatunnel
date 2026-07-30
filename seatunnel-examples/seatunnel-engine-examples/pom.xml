@@ -40,6 +40,17 @@
             <groupId>org.apache.seatunnel</groupId>
             <artifactId>seatunnel-clickhouse-log-appender</artifactId>
             <version>${project.version}</version>
+            <!--
+                排除 clickhouse-jdbc，避免 IDE classpath 混入无 classifier 的裸包
+                （与 Guava 27 冲突：buildKeepingLast）。ClickHouse 驱动统一由 connector-xjjdbc 的
+                clickhouse-jdbc:all（reloc Guava）提供，不抬升 SeaTunnel 官方 Guava。
+            -->
+            <exclusions>
+                <exclusion>
+                    <groupId>com.clickhouse</groupId>
+                    <artifactId>clickhouse-jdbc</artifactId>
+                </exclusion>
+            </exclusions>
         </dependency>
 
         <dependency>
@@ -58,6 +69,11 @@
         <dependency>
             <groupId>org.apache.seatunnel</groupId>
             <artifactId>connector-fake</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.seatunnel</groupId>
+            <artifactId>connector-http-base</artifactId>
             <version>${project.version}</version>
         </dependency>
         <dependency>

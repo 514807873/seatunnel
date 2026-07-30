@@ -110,12 +110,16 @@ public class SourceExecuteProcessor extends FlinkAbstractPluginExecuteProcessor<
                                 evolvedStream,
                                 sourceTableInfo.getCatalogTables(),
                                 ReadonlyConfig.fromConfig(pluginConfig).get(PLUGIN_OUTPUT)));
+                registerSeaTunnelResultTable(
+                        pluginConfig, evolvedStream, sourceTableInfo.getCatalogTables());
             } else {
                 sources.add(
                         new DataStreamTableInfo(
                                 sourceStream,
                                 sourceTableInfo.getCatalogTables(),
                                 ReadonlyConfig.fromConfig(pluginConfig).get(PLUGIN_OUTPUT)));
+                registerSeaTunnelResultTable(
+                        pluginConfig, sourceStream, sourceTableInfo.getCatalogTables());
             }
         }
         return sources;

@@ -25,6 +25,7 @@ import org.apache.seatunnel.api.serialization.SerializationSchema;
 import org.apache.seatunnel.api.sink.SupportMultiTableSinkWriter;
 import org.apache.seatunnel.api.table.type.SeaTunnelRow;
 import org.apache.seatunnel.api.table.type.SeaTunnelRowType;
+import org.apache.seatunnel.common.utils.JsonUtils;
 import org.apache.seatunnel.connectors.seatunnel.common.sink.AbstractSinkWriter;
 import org.apache.seatunnel.connectors.seatunnel.http.client.HttpClientProvider;
 import org.apache.seatunnel.connectors.seatunnel.http.client.HttpResponse;
@@ -35,7 +36,9 @@ import lombok.extern.slf4j.Slf4j;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 
@@ -137,8 +140,13 @@ public class HttpSinkWriter extends AbstractSinkWriter<SeaTunnelRow, Void>
 
     private void doHttpRequest(String body) {
         try {
+            Map<String, Object> postData = new HashMap<>();
+            postData.put("xj_data", body);
             HttpResponse response =
-                    httpClient.doPost(httpParameter.getUrl(), httpParameter.getHeaders(), body);
+                    httpClient.doPost(
+                            httpParameter.getUrl(),
+                            httpParameter.getHeaders(),
+                            JsonUtils.toJsonString(postData));
             if (HttpResponse.STATUS_OK == response.getCode()) {
                 return;
             }

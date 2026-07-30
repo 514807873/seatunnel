@@ -84,7 +84,10 @@ public class SeaTunnelRowType implements CompositeType<SeaTunnelRow> {
             }
         }
         if (throwExceptionWhenNotFound) {
-            throw new IllegalArgumentException(String.format("can't find field [%s]", fieldName));
+            throw new IllegalArgumentException(
+                    String.format(
+                            "can't find field [%s] in [%s]",
+                            fieldName, Arrays.toString(fieldNames)));
         } else {
             return -1;
         }

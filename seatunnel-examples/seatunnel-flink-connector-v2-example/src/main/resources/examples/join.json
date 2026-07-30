@@ -1,0 +1,308 @@
+{
+  "env": {
+    "job.mode": "BATCH",
+    "isRecordErrorData": 1,
+    "execution.parallelism": 1,
+    "maxRecordNumber": 100,
+    "job.name": "测试照片"
+  },
+  "source": [
+    {
+      "plugin_name": "JDBC",
+      "input_type": "sql",
+      "query": "select * from tydb.t_ykt_transactions a where rownum<=100",
+      "db_type": "ORACLE",
+      "url": "jdbc:oracle:thin:@192.168.10.46:1521:orcl",
+      "driver": "oracle.jdbc.driver.OracleDriver",
+      "user": "tydb",
+      "password": "oracle",
+      "db_datasource_id": "1712299719625191425",
+      "database": "orcl",
+      "dbSchema": "",
+      "table_name": "",
+      "columns": [
+
+      ],
+      "result_columns": [
+        {
+          "decimalDigit": 0,
+          "size": 10,
+          "name": "CUSTOMERID",
+          "type": "NUMBER",
+          "sourceColumn": "1712299719625191425.tydb.t_ykt_transactions.customerid"
+        },
+        {
+          "decimalDigit": 0,
+          "size": 100,
+          "name": "SCARDSNR",
+          "type": "VARCHAR2",
+          "sourceColumn": "1712299719625191425.tydb.t_ykt_transactions.scardsnr"
+        },
+        {
+          "decimalDigit": 0,
+          "size": 100,
+          "name": "OUTID",
+          "type": "VARCHAR2",
+          "sourceColumn": "1712299719625191425.tydb.t_ykt_transactions.outid"
+        },
+        {
+          "decimalDigit": 0,
+          "size": 100,
+          "name": "TREMID",
+          "type": "VARCHAR2",
+          "sourceColumn": "1712299719625191425.tydb.t_ykt_transactions.tremid"
+        },
+        {
+          "decimalDigit": 0,
+          "size": 100,
+          "name": "TERMED",
+          "type": "VARCHAR2",
+          "sourceColumn": "1712299719625191425.tydb.t_ykt_transactions.termed"
+        },
+        {
+          "decimalDigit": 0,
+          "size": 0,
+          "name": "OPDT",
+          "type": "DATE",
+          "sourceColumn": "1712299719625191425.tydb.t_ykt_transactions.opdt"
+        },
+        {
+          "decimalDigit": 0,
+          "size": 0,
+          "name": "OPTM",
+          "type": "DATE",
+          "sourceColumn": "1712299719625191425.tydb.t_ykt_transactions.optm"
+        },
+        {
+          "decimalDigit": 2,
+          "size": 18,
+          "name": "ZHYE",
+          "type": "NUMBER",
+          "sourceColumn": "1712299719625191425.tydb.t_ykt_transactions.zhye"
+        },
+        {
+          "decimalDigit": 2,
+          "size": 18,
+          "name": "KNYE",
+          "type": "NUMBER",
+          "sourceColumn": "1712299719625191425.tydb.t_ykt_transactions.knye"
+        },
+        {
+          "decimalDigit": 2,
+          "size": 18,
+          "name": "OPFARE",
+          "type": "NUMBER",
+          "sourceColumn": "1712299719625191425.tydb.t_ykt_transactions.opfare"
+        },
+        {
+          "decimalDigit": 0,
+          "size": 10,
+          "name": "OPCOUNT",
+          "type": "NUMBER",
+          "sourceColumn": "1712299719625191425.tydb.t_ykt_transactions.opcount"
+        },
+        {
+          "decimalDigit": 0,
+          "size": 10,
+          "name": "TRAN_TYPE",
+          "type": "VARCHAR2",
+          "sourceColumn": "1712299719625191425.tydb.t_ykt_transactions.tran_type"
+        },
+        {
+          "decimalDigit": 0,
+          "size": 10,
+          "name": "TRANSACTION_STATUS",
+          "type": "VARCHAR2",
+          "sourceColumn": "1712299719625191425.tydb.t_ykt_transactions.transaction_status"
+        },
+        {
+          "decimalDigit": 0,
+          "size": 10,
+          "name": "TRAN_CODE",
+          "type": "VARCHAR2",
+          "sourceColumn": "1712299719625191425.tydb.t_ykt_transactions.tran_code"
+        },
+        {
+          "decimalDigit": 6,
+          "size": 0,
+          "name": "TSTAMP",
+          "type": "TIMESTAMP",
+          "sourceColumn": "1712299719625191425.tydb.t_ykt_transactions.tstamp"
+        }
+      ],
+      "result_table_name": "t1"
+    },
+    {
+      "plugin_name": "JDBC",
+      "input_type": "sql",
+      "query": "select * from tydb.t_ykt_transactions a where rownum<=100",
+      "db_type": "ORACLE",
+      "table_name": "",
+      "columns": [
+
+      ],
+      "dbSchema": "",
+      "url": "jdbc:oracle:thin:@192.168.10.46:1521:orcl",
+      "driver": "oracle.jdbc.driver.OracleDriver",
+      "user": "tydb",
+      "password": "oracle",
+      "db_datasource_id": "1712299719625191425",
+      "database": "orcl",
+      "result_columns": [
+        {
+          "decimalDigit": 0,
+          "size": 10,
+          "name": "CUSTOMERID",
+          "type": "NUMBER",
+          "sourceColumn": "1712299719625191425.tydb.t_ykt_transactions.customerid"
+        },
+        {
+          "decimalDigit": 0,
+          "size": 100,
+          "name": "SCARDSNR",
+          "type": "VARCHAR2",
+          "sourceColumn": "1712299719625191425.tydb.t_ykt_transactions.scardsnr"
+        },
+        {
+          "decimalDigit": 0,
+          "size": 100,
+          "name": "OUTID",
+          "type": "VARCHAR2",
+          "sourceColumn": "1712299719625191425.tydb.t_ykt_transactions.outid"
+        },
+        {
+          "decimalDigit": 0,
+          "size": 100,
+          "name": "TREMID",
+          "type": "VARCHAR2",
+          "sourceColumn": "1712299719625191425.tydb.t_ykt_transactions.tremid"
+        },
+        {
+          "decimalDigit": 0,
+          "size": 100,
+          "name": "TERMED",
+          "type": "VARCHAR2",
+          "sourceColumn": "1712299719625191425.tydb.t_ykt_transactions.termed"
+        },
+        {
+          "decimalDigit": 0,
+          "size": 0,
+          "name": "OPDT",
+          "type": "DATE",
+          "sourceColumn": "1712299719625191425.tydb.t_ykt_transactions.opdt"
+        },
+        {
+          "decimalDigit": 0,
+          "size": 0,
+          "name": "OPTM",
+          "type": "DATE",
+          "sourceColumn": "1712299719625191425.tydb.t_ykt_transactions.optm"
+        },
+        {
+          "decimalDigit": 2,
+          "size": 18,
+          "name": "ZHYE",
+          "type": "NUMBER",
+          "sourceColumn": "1712299719625191425.tydb.t_ykt_transactions.zhye"
+        },
+        {
+          "decimalDigit": 2,
+          "size": 18,
+          "name": "KNYE",
+          "type": "NUMBER",
+          "sourceColumn": "1712299719625191425.tydb.t_ykt_transactions.knye"
+        },
+        {
+          "decimalDigit": 2,
+          "size": 18,
+          "name": "OPFARE",
+          "type": "NUMBER",
+          "sourceColumn": "1712299719625191425.tydb.t_ykt_transactions.opfare"
+        },
+        {
+          "decimalDigit": 0,
+          "size": 10,
+          "name": "OPCOUNT",
+          "type": "NUMBER",
+          "sourceColumn": "1712299719625191425.tydb.t_ykt_transactions.opcount"
+        },
+        {
+          "decimalDigit": 0,
+          "size": 10,
+          "name": "TRAN_TYPE",
+          "type": "VARCHAR2",
+          "sourceColumn": "1712299719625191425.tydb.t_ykt_transactions.tran_type"
+        },
+        {
+          "decimalDigit": 0,
+          "size": 10,
+          "name": "TRANSACTION_STATUS",
+          "type": "VARCHAR2",
+          "sourceColumn": "1712299719625191425.tydb.t_ykt_transactions.transaction_status"
+        },
+        {
+          "decimalDigit": 0,
+          "size": 10,
+          "name": "TRAN_CODE",
+          "type": "VARCHAR2",
+          "sourceColumn": "1712299719625191425.tydb.t_ykt_transactions.tran_code"
+        },
+        {
+          "decimalDigit": 6,
+          "size": 0,
+          "name": "TSTAMP",
+          "type": "TIMESTAMP",
+          "sourceColumn": "1712299719625191425.tydb.t_ykt_transactions.tstamp"
+        }
+      ],
+      "result_table_name": "t2"
+    }
+  ],
+  "transform": [
+
+  ],
+  "sink": [
+    {
+      "plugin_name": "XJJDBC",
+      "url": "jdbc:clickhouse://192.168.11.228:8123/ssb?socket_timeout=60000",
+      "driver": "com.clickhouse.jdbc.ClickHouseDriver",
+      "user": "default",
+      "password": "xjgreat",
+      "db_datasource_id": "1704699193694552065",
+      "db_type": "CLICKHOUSE",
+      "dbSchema": "",
+      "table": "YKT_UNION",
+      "primary_keys": [
+        "CUSTOMERID"
+      ],
+      "field_mapper": {
+        "CUSTOMERID": "CUSTOMERID",
+        "SCARDSNR": "SCARDSNR",
+        "OUTID": "OUTID",
+        "TREMID": "TREMID",
+        "TERMED": "TERMED",
+        "OPDT": "OPDT",
+        "OPTM": "OPTM",
+        "ZHYE": "ZHYE",
+        "KNYE": "KNYE",
+        "OPFARE": "OPFARE",
+        "OPCOUNT": "OPCOUNT",
+        "TRAN_TYPE": "TRAN_TYPE",
+        "TRANSACTION_STATUS": "TRANSACTION_STATUS",
+        "TRAN_CODE": "TRAN_CODE",
+        "TSTAMP": "TSTAMP"
+      },
+      "pre_config": {
+        "cleanTableWhenCompleteNoDataIn": true,
+        "ignoreTstamp": true,
+        "cleanTableWhenComplete": true,
+        "incrementMode": "update",
+        "insertMode": "complete"
+      },
+      "source_table_name": [
+        "t1",
+        "t2"
+      ]
+    }
+  ]
+}

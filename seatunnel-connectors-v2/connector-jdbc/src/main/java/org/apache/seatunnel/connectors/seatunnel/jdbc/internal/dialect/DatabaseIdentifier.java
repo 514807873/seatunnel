@@ -49,4 +49,7 @@ public class DatabaseIdentifier {
     public static final String PRESTO = "Presto";
     public static final String DUCKDB = "DuckDB";
     public static final String DSQL = "Dsql";
+    public static final String HEXADB = "Hexadb";
+    public static final String TRINO = "Trino";
+    public static final String CLICKHOUSE = "ClickHouse";
 }

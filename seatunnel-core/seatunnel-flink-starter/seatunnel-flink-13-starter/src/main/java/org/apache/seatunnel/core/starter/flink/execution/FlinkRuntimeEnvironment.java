@@ -21,11 +21,24 @@ import org.apache.seatunnel.shade.com.typesafe.config.Config;
 
 import org.apache.seatunnel.common.constants.JobMode;
 import org.apache.seatunnel.core.starter.execution.RuntimeEnvironment;
+import org.apache.seatunnel.core.starter.flink.utils.EnvironmentUtil;
+import org.apache.seatunnel.core.starter.flink.utils.TableUtil;
+
+import org.apache.flink.streaming.api.datastream.DataStream;
+import org.apache.flink.table.api.EnvironmentSettings;
+import org.apache.flink.table.api.Expressions;
+import org.apache.flink.table.api.bridge.java.StreamTableEnvironment;
+import org.apache.flink.table.expressions.Expression;
+import org.apache.flink.types.Row;
+
+import java.util.Arrays;
 
 public class FlinkRuntimeEnvironment extends AbstractFlinkRuntimeEnvironment
         implements RuntimeEnvironment {
 
     private static volatile FlinkRuntimeEnvironment INSTANCE = null;
+
+    private StreamTableEnvironment tableEnvironment;
 
     private FlinkRuntimeEnvironment(Config config) {
         super(config);
@@ -40,6 +53,7 @@ public class FlinkRuntimeEnvironment extends AbstractFlinkRuntimeEnvironment
     @Override
     public FlinkRuntimeEnvironment prepare() {
         createStreamEnvironment();
+        createStreamTableEnvironment();
         if (config.hasPath("job.name")) {
             jobName = config.getString("job.name");
         }
@@ -50,6 +64,48 @@ public class FlinkRuntimeEnvironment extends AbstractFlinkRuntimeEnvironment
     public FlinkRuntimeEnvironment setJobMode(JobMode jobMode) {
         this.jobMode = jobMode;
         return this;
+    }
+
+    public StreamTableEnvironment getStreamTableEnvironment() {
+        return tableEnvironment;
+    }
+
+    private void createStreamTableEnvironment() {
+        EnvironmentSettings environmentSettings =
+                EnvironmentSettings.newInstance().inStreamingMode().build();
+        tableEnvironment =
+                StreamTableEnvironment.create(getStreamExecutionEnvironment(), environmentSettings);
+        EnvironmentUtil.initTableEnvironmentConfiguration(
+                this.config, tableEnvironment.getConfig().getConfiguration());
+    }
+
+    /**
+     * Register a Flink DataStream as a temporary table for SQL JOIN.
+     *
+     * @param config plugin config (may contain field_name)
+     * @param dataStream flink Row stream
+     * @param name table name
+     * @param isAppend true for append-only view after BATCH retract materialize
+     */
+    public void registerResultTable(
+            Config config, DataStream<Row> dataStream, String name, Boolean isAppend) {
+        StreamTableEnvironment env = this.getStreamTableEnvironment();
+        if (!TableUtil.tableExists(env, name) && Boolean.TRUE.equals(isAppend)) {
+            if (config.hasPath("field_name")) {
+                String[] fields =
+                        Arrays.stream(config.getString("field_name").split(","))
+                                .map(String::trim)
+                                .filter(s -> !s.isEmpty())
+                                .toArray(String[]::new);
+                Expression[] exprs =
+                        Arrays.stream(fields).map(Expressions::$).toArray(Expression[]::new);
+                env.createTemporaryView(name, env.fromDataStream(dataStream, exprs));
+            } else {
+                env.createTemporaryView(name, env.fromDataStream(dataStream));
+            }
+            return;
+        }
+        env.createTemporaryView(name, env.fromChangelogStream(dataStream));
     }
 
     public static FlinkRuntimeEnvironment getInstance(Config config) {

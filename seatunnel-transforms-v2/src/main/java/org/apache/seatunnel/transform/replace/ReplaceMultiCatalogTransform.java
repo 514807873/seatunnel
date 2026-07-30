@@ -41,7 +41,7 @@ public class ReplaceMultiCatalogTransform extends AbstractMultiCatalogMapTransfo
     @Override
     protected SeaTunnelTransform<SeaTunnelRow> buildTransform(
             CatalogTable inputCatalogTable, ReadonlyConfig config) {
-        return new ReplaceTransform(config, inputCatalogTable);
+        return new ReplaceTransform(ReplaceTransformConfig.of(config), inputCatalogTable);
     }
 
     @Override

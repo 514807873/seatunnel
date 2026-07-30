@@ -26,6 +26,7 @@ import org.apache.seatunnel.core.starter.command.ConfEncryptCommand;
 import org.apache.seatunnel.core.starter.enums.MasterType;
 import org.apache.seatunnel.core.starter.flink.command.FlinkConfValidateCommand;
 import org.apache.seatunnel.core.starter.flink.command.FlinkTaskExecuteCommand;
+import org.apache.seatunnel.core.starter.flink.command.FlinkTaskFromDbExecuteCommand;
 
 import com.beust.jcommander.IStringConverter;
 import com.beust.jcommander.Parameter;
@@ -64,6 +65,9 @@ public class FlinkCommandArgs extends AbstractCommandArgs {
         }
         if (decrypt) {
             return new ConfDecryptCommand(this);
+        }
+        if (db) {
+            return new FlinkTaskFromDbExecuteCommand(this);
         }
         return new FlinkTaskExecuteCommand(this);
     }

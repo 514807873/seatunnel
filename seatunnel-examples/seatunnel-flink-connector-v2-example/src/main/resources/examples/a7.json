@@ -1,0 +1,110 @@
+{
+  "env": {
+    "job.mode": "STREAMING",
+    "isRecordErrorData": 0,
+    "execution.parallelism": 1,
+    "maxRecordNumber": 0,
+    "job.name": "CDC模式实时同步接口测试",
+    "checkpoint.interval": 5000
+  },
+  "source": [
+    {
+      "db_type": "MYSQL",
+      "base-url": "jdbc:mysql://rm-8vb52u35x4v4u79l7go.mysql.zhangbei.rds.aliyuncs.com:3306/udm?useUnicode=yes&characterEncoding=UTF-8&useSSL=false&serverTimezone=UTC&zeroDateTimeBehavior=convertToNull&tinyInt1isBit=false",
+      "password": "Xjcz80882488",
+      "startup.mode": "initial",
+      "query": "select * from udm.tag_table",
+      "table-names": [
+        "udm.tag_table"
+      ],
+      "db_datasource_id": "1838779629542502402",
+      "result_columns": [
+        {
+          "fullAlias": "id",
+          "nullable": false,
+          "typeName": "INT",
+          "isPrimaryKey": true,
+          "remark": "",
+          "type": "INT",
+          "database": "udm",
+          "decimalDigit": 0,
+          "size": 11,
+          "autoincrement": false,
+          "name": "id",
+          "table": "tag_table",
+          "order": 1,
+          "primaryKey": true
+        },
+        {
+          "fullAlias": "name",
+          "nullable": true,
+          "typeName": "VARCHAR",
+          "isPrimaryKey": false,
+          "remark": "",
+          "type": "VARCHAR",
+          "database": "udm",
+          "decimalDigit": 0,
+          "size": 255,
+          "autoincrement": false,
+          "name": "name",
+          "table": "tag_table",
+          "order": 2,
+          "primaryKey": false
+        },
+        {
+          "fullAlias": "sex",
+          "nullable": true,
+          "typeName": "VARCHAR",
+          "isPrimaryKey": false,
+          "remark": "",
+          "type": "VARCHAR",
+          "database": "udm",
+          "decimalDigit": 0,
+          "size": 255,
+          "autoincrement": false,
+          "name": "sex",
+          "table": "tag_table",
+          "order": 3,
+          "primaryKey": false
+        }
+      ],
+      "result_table_name": "t1",
+      "plugin_name": "MySQL-CDC",
+      "user": "xjudw",
+      "username": "xjudw"
+    }
+  ],
+  "transform": [],
+  "sink": [
+    {
+      "db_type": "CLICKHOUSE",
+      "dbSchema": "",
+      "primary_keys": [
+        "id"
+      ],
+      "db_datasource_id": "1838352898415325186",
+      "recordOperation": false,
+      "source_table_name": [
+        "t1"
+      ],
+      "plugin_name": "JDBC",
+      "url": "jdbc:clickhouse://124.220.134.47:8123/xj_ods?socket_timeout=600000",
+      "value_mapper": {
+        "0": "id",
+        "1": "name",
+        "2": "sex"
+      },
+      "database": "xj_ods",
+      "password": "Xjcz#qwe@20200720",
+      "driver": "com.clickhouse.jdbc.ClickHouseDriver",
+      "field_mapper": {
+        "sex": "sex",
+        "name": "name",
+        "id": "id"
+      },
+      "generate_sink_sql": true,
+      "user": "default",
+      "table": "T_XCGL_tag_table"
+    }
+  ]
+}

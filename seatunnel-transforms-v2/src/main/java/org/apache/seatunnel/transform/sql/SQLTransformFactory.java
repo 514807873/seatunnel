@@ -26,6 +26,7 @@ import org.apache.seatunnel.transform.common.TransformCommonOptions;
 
 import com.google.auto.service.AutoService;
 
+import static org.apache.seatunnel.transform.sql.SQLTransform.KEY_ENGINE;
 import static org.apache.seatunnel.transform.sql.SQLTransform.KEY_QUERY;
 
 @AutoService(Factory.class)
@@ -38,7 +39,8 @@ public class SQLTransformFactory implements TableTransformFactory {
     @Override
     public OptionRule optionRule() {
         return OptionRule.builder()
-                .optional(KEY_QUERY)
+                .required(KEY_QUERY)
+                .optional(KEY_ENGINE)
                 .optional(TransformCommonOptions.MULTI_TABLES)
                 .optional(TransformCommonOptions.TABLE_MATCH_REGEX)
                 .build();
@@ -46,8 +48,7 @@ public class SQLTransformFactory implements TableTransformFactory {
 
     @Override
     public TableTransform createTransform(TableTransformFactoryContext context) {
-        return () ->
-                new SQLMultiCatalogFlatMapTransform(
-                        context.getCatalogTables(), context.getOptions());
+        // Pass all catalog tables so Flink SQL engine can merge multi-table schemas when needed.
+        return () -> new SQLTransform(context.getOptions(), context.getCatalogTables());
     }
 }

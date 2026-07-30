@@ -46,6 +46,9 @@ public class HttpParameter implements Serializable {
     protected int batchSize = 1;
     protected int requestIntervalMs = 0;
     protected boolean jsonFiledMissedReturnNull;
+    protected String offsetJsonPath;
+    protected String dynamicMethod;
+    protected int maxSafePage = HttpSourceOptions.MAX_SAFE_PAGE.defaultValue();
 
     public void buildWithConfig(ReadonlyConfig pluginConfig) {
         // set url
@@ -86,5 +89,12 @@ public class HttpParameter implements Serializable {
         this.setSocketTimeoutMs(pluginConfig.get(HttpSourceOptions.SOCKET_TIMEOUT_MS));
         this.setJsonFiledMissedReturnNull(
                 pluginConfig.get(HttpSourceOptions.JSON_FILED_MISSED_RETURN_NULL));
+        if (pluginConfig.getOptional(HttpSourceOptions.DYNAMIC_METHOD).isPresent()) {
+            this.setDynamicMethod(pluginConfig.get(HttpSourceOptions.DYNAMIC_METHOD));
+        }
+        if (pluginConfig.getOptional(HttpSourceOptions.OFFSET).isPresent()) {
+            this.setOffsetJsonPath(pluginConfig.get(HttpSourceOptions.OFFSET));
+        }
+        this.setMaxSafePage(pluginConfig.get(HttpSourceOptions.MAX_SAFE_PAGE));
     }
 }

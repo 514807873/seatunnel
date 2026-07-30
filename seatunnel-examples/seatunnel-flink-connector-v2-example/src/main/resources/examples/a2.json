@@ -1,0 +1,53 @@
+{
+  "env": {
+    "job.mode": "STREAMING",
+    "isRecordErrorData": 0,
+    "execution.parallelism": 1,
+    "maxRecordNumber": 0,
+    "job.name": "aa",
+    "checkpoint.interval": 60000
+  },
+  "source": [
+    {
+      "plugin_name": "Postgres-CDC",
+      "base-url": "jdbc:postgresql://192.168.9.146:5432/usr_ods_db?loggerLevel=OFF",
+      "username": "usr_ods",
+      "password": "usr_ods#20231024",
+      "db_datasource_id": "1790301960810131458",
+      "database-names" :["usr_ods_db"],
+      "schema-names" : ["public"],
+      "table-names": [
+        "usr_ods_db.public.user"
+      ],
+      "result_table_name": "t1"
+    }
+  ],
+  "transform": [],
+  "sink": [
+    {
+      "plugin_name": "JDBC",
+      "generate_sink_sql": true,
+      "primary_keys": [
+        "id"
+      ],
+      "db_type": "MYSQL",
+      "url": "jdbc:mysql://192.168.9.63:30316/renshi?useUnicode=yes&characterEncoding=UTF-8&useSSL=false&serverTimezone=UTC",
+      "driver": "com.mysql.cj.jdbc.Driver",
+      "user": "root",
+      "database": "renshi",
+      "password": "PANGUmysql2023:)",
+      "db_datasource_id": "1740318056713101314",
+      "dbSchema": "",
+      "table": "pg_user",
+      "field_mapper": {
+        "id": "id",
+        "name": "name",
+        "age": "age",
+        "sex": "sex"
+      },
+      "source_table_name": [
+        "t1"
+      ]
+    }
+  ]
+}

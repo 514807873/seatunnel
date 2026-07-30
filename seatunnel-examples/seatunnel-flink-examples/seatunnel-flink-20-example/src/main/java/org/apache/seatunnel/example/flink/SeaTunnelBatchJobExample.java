@@ -30,7 +30,7 @@ public class SeaTunnelBatchJobExample {
 
     public static void main(String[] args)
             throws FileNotFoundException, URISyntaxException, CommandException {
-        String configurePath = args.length > 0 ? args[0] : "/examples/fake_to_console_batch.conf";
+        String configurePath = args.length > 0 ? args[0] : "/examples/a1.json";
         String configFile = getTestConfigFile(configurePath);
         FlinkCommandArgs flinkCommandArgs = new FlinkCommandArgs();
         flinkCommandArgs.setConfigFile(configFile);

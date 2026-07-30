@@ -66,7 +66,8 @@ public class JdbcSinkWriter extends AbstractJdbcSinkWriter<ConnectionPoolManager
         this.primaryKeyIndex = primaryKeyIndex;
         this.codeConverter = JdbcCodeMapperSupport.createCodeConverter(jdbcSinkConfig);
         // Rebuild write schema with sink column names (XH/XM...) when field mapping is configured.
-        // Upstream catalog schema still uses source names (ID/NAME...), which breaks upsert PK lookup.
+        // Upstream catalog schema still uses source names (ID/NAME...), which breaks upsert PK
+        // lookup.
         this.tableSchema =
                 JdbcFieldMappingUtils.rebuildSinkTableSchema(
                         jdbcSinkConfig, tableSchema, databaseTableSchema);

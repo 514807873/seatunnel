@@ -101,7 +101,8 @@ final class JdbcFieldMappingUtils {
                 if (sourceIndex < 0) {
                     continue;
                 }
-                sinkColumns.add(upstreamSchema.getColumns().get(sourceIndex).rename(entry.getValue()));
+                sinkColumns.add(
+                        upstreamSchema.getColumns().get(sourceIndex).rename(entry.getValue()));
             }
         }
 
@@ -121,7 +122,8 @@ final class JdbcFieldMappingUtils {
                             .filter(
                                     pk ->
                                             sinkColumns.stream()
-                                                    .anyMatch(c -> c.getName().equalsIgnoreCase(pk)))
+                                                    .anyMatch(
+                                                            c -> c.getName().equalsIgnoreCase(pk)))
                             .collect(Collectors.toList());
             if (!matched.isEmpty()) {
                 builder.primaryKey(PrimaryKey.of(matched.get(0) + "_pk", matched));

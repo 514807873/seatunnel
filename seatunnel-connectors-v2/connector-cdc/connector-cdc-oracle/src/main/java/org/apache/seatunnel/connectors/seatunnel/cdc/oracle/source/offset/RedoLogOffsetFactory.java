@@ -68,8 +68,8 @@ public class RedoLogOffsetFactory extends OffsetFactory {
 
     @Override
     public Offset specific(String filename, Long position) {
-        throw new UnsupportedOperationException(
-                "not supported create new Offset by filename and position.");
+        // Oracle CDC startup uses SCN as position; filename is unused.
+        return new RedoLogOffset(position);
     }
 
     @Override

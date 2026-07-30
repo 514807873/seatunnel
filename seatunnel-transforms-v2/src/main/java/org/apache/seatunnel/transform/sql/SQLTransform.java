@@ -38,6 +38,7 @@ import lombok.extern.slf4j.Slf4j;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -66,8 +67,14 @@ public class SQLTransform extends AbstractCatalogSupportFlatMapTransform {
 
     private final String inputTableName;
 
+    private final SeaTunnelRowType inputRowType;
+
     public SQLTransform(@NonNull ReadonlyConfig config, @NonNull CatalogTable catalogTable) {
-        super(catalogTable);
+        this(config, Collections.singletonList(catalogTable));
+    }
+
+    public SQLTransform(@NonNull ReadonlyConfig config, List<CatalogTable> catalogTables) {
+        super(catalogTables.get(0));
         this.query = config.get(KEY_QUERY);
         if (config.getOptional(KEY_ENGINE).isPresent()) {
             this.engineType = EngineType.valueOf(config.get(KEY_ENGINE).toUpperCase());
@@ -79,7 +86,24 @@ public class SQLTransform extends AbstractCatalogSupportFlatMapTransform {
         if (pluginInputIdentifiers != null && !pluginInputIdentifiers.isEmpty()) {
             this.inputTableName = pluginInputIdentifiers.get(0);
         } else {
-            this.inputTableName = catalogTable.getTableId().getTableName();
+            this.inputTableName = catalogTables.get(0).getTableId().getTableName();
+        }
+
+        if (catalogTables.size() == 1) {
+            this.inputRowType = catalogTables.get(0).getSeaTunnelRowType();
+        } else {
+            List<Column> columns = new ArrayList<>();
+            for (CatalogTable catalogTable : catalogTables) {
+                columns.addAll(catalogTable.getTableSchema().getColumns());
+            }
+            String[] fieldNames = new String[columns.size()];
+            SeaTunnelDataType<?>[] fieldTypes = new SeaTunnelDataType<?>[columns.size()];
+            for (int i = 0; i < columns.size(); i++) {
+                Column column = columns.get(i);
+                fieldNames[i] = column.getName();
+                fieldTypes[i] = column.getDataType();
+            }
+            this.inputRowType = new SeaTunnelRowType(fieldNames, fieldTypes);
         }
     }
 
@@ -92,10 +116,7 @@ public class SQLTransform extends AbstractCatalogSupportFlatMapTransform {
     public void open() {
         sqlEngine = SQLEngineFactory.getSQLEngine(engineType);
         sqlEngine.init(
-                inputTableName,
-                inputCatalogTable.getTableId().getTableName(),
-                inputCatalogTable.getSeaTunnelRowType(),
-                query);
+                inputTableName, inputCatalogTable.getTableId().getTableName(), inputRowType, query);
     }
 
     private void tryOpen() {

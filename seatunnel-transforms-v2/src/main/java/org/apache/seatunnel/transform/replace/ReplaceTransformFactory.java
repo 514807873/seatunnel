@@ -17,12 +17,13 @@
 
 package org.apache.seatunnel.transform.replace;
 
+import org.apache.seatunnel.api.configuration.ReadonlyConfig;
 import org.apache.seatunnel.api.configuration.util.OptionRule;
+import org.apache.seatunnel.api.table.catalog.CatalogTable;
 import org.apache.seatunnel.api.table.connector.TableTransform;
 import org.apache.seatunnel.api.table.factory.Factory;
 import org.apache.seatunnel.api.table.factory.TableTransformFactory;
 import org.apache.seatunnel.api.table.factory.TableTransformFactoryContext;
-import org.apache.seatunnel.transform.common.TransformCommonOptions;
 
 import com.google.auto.service.AutoService;
 
@@ -35,24 +36,14 @@ public class ReplaceTransformFactory implements TableTransformFactory {
 
     @Override
     public OptionRule optionRule() {
-        return OptionRule.builder()
-                .optional(
-                        ReplaceTransformConfig.KEY_REPLACE_FIELD,
-                        ReplaceTransformConfig.KEY_PATTERN,
-                        ReplaceTransformConfig.KEY_REPLACEMENT)
-                .optional(ReplaceTransformConfig.KEY_IS_REGEX)
-                .conditional(
-                        ReplaceTransformConfig.KEY_IS_REGEX,
-                        true,
-                        ReplaceTransformConfig.KEY_REPLACE_FIRST)
-                .optional(TransformCommonOptions.MULTI_TABLES)
-                .optional(TransformCommonOptions.TABLE_MATCH_REGEX)
-                .build();
+        return OptionRule.builder().optional(ReplaceTransformConfig.REPLACE_FIELDS).build();
     }
 
     @Override
     public TableTransform createTransform(TableTransformFactoryContext context) {
-        return () ->
-                new ReplaceMultiCatalogTransform(context.getCatalogTables(), context.getOptions());
+        CatalogTable catalogTable = context.getCatalogTables().get(0);
+        ReadonlyConfig options = context.getOptions();
+        ReplaceTransformConfig replaceTransformConfig = ReplaceTransformConfig.of(options);
+        return () -> new ReplaceTransform(replaceTransformConfig, catalogTable);
     }
 }

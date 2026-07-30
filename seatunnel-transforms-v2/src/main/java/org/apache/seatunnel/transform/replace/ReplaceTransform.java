@@ -17,32 +17,53 @@
 
 package org.apache.seatunnel.transform.replace;
 
-import org.apache.seatunnel.api.configuration.ReadonlyConfig;
 import org.apache.seatunnel.api.table.catalog.CatalogTable;
-import org.apache.seatunnel.api.table.catalog.Column;
-import org.apache.seatunnel.api.table.type.SeaTunnelRowAccessor;
+import org.apache.seatunnel.api.table.catalog.TableIdentifier;
+import org.apache.seatunnel.api.table.catalog.TableSchema;
+import org.apache.seatunnel.api.table.type.SeaTunnelRow;
 import org.apache.seatunnel.api.table.type.SeaTunnelRowType;
-import org.apache.seatunnel.transform.common.SingleFieldOutputTransform;
-import org.apache.seatunnel.transform.exception.TransformCommonError;
+import org.apache.seatunnel.api.transform.SeaTunnelTransform;
+import org.apache.seatunnel.transform.common.AbstractCatalogSupportMapTransform;
 
-import org.apache.commons.collections4.CollectionUtils;
-
+import com.google.auto.service.AutoService;
 import lombok.NonNull;
 
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.Optional;
 import java.util.stream.Collectors;
 
-public class ReplaceTransform extends SingleFieldOutputTransform {
-    private final ReadonlyConfig config;
-    private int inputFieldIndex;
+@AutoService(SeaTunnelTransform.class)
+public class ReplaceTransform extends AbstractCatalogSupportMapTransform {
+    private ReplaceTransformConfig config;
+    private List<XjReplaceConfig> replaceFields;
+
+    private Map<String, List<XjReplaceConfig>> fieldsMap;
+
+    private final Map<String, Integer> filedsValueIndexMap = new HashMap<>();
 
     public ReplaceTransform(
-            @NonNull ReadonlyConfig config, @NonNull CatalogTable inputCatalogTable) {
-        super(inputCatalogTable);
+            @NonNull ReplaceTransformConfig config, @NonNull CatalogTable catalogTable) {
+        super(catalogTable);
         this.config = config;
-        initOutputFields(
-                inputCatalogTable.getTableSchema().toPhysicalRowDataType(),
-                this.config.get(ReplaceTransformConfig.KEY_REPLACE_FIELD));
+        this.replaceFields = config.getReplaceFields();
+        SeaTunnelRowType inputRowType =
+                this.inputCatalogTable.getTableSchema().toPhysicalRowDataType();
+        for (int i = 0; i < inputRowType.getFieldNames().length; i++) {
+            String fieldName = inputRowType.getFieldName(i);
+            int finalI = i;
+            this.replaceFields.stream()
+                    .filter(x -> x.getColumnName().equalsIgnoreCase(fieldName))
+                    .forEach(x -> x.setValueIndex(finalI));
+        }
+        this.fieldsMap =
+                this.replaceFields.stream()
+                        .collect(Collectors.groupingBy(XjReplaceConfig::getColumnName));
+        this.fieldsMap.forEach(
+                (k, v) -> {
+                    filedsValueIndexMap.put(k, v.get(0).getValueIndex());
+                });
     }
 
     @Override
@@ -50,62 +71,75 @@ public class ReplaceTransform extends SingleFieldOutputTransform {
         return "Replace";
     }
 
-    private void initOutputFields(SeaTunnelRowType inputRowType, String replaceField) {
-        try {
-            inputFieldIndex = inputRowType.indexOf(replaceField);
-        } catch (IllegalArgumentException e) {
-            throw TransformCommonError.cannotFindInputFieldError(getPluginName(), replaceField);
-        }
+    @Override
+    protected TableSchema transformTableSchema() {
+        return inputCatalogTable.getTableSchema();
     }
 
     @Override
-    protected Object getOutputFieldValue(SeaTunnelRowAccessor inputRow) {
-        Object inputFieldValue = inputRow.getField(inputFieldIndex);
-        if (inputFieldValue == null) {
-            return null;
-        }
+    protected TableIdentifier transformTableIdentifier() {
+        return inputCatalogTable.getTableId().copy();
+    }
 
-        boolean isRegex =
-                config.get(ReplaceTransformConfig.KEY_IS_REGEX) != null
-                        && config.get(ReplaceTransformConfig.KEY_IS_REGEX);
-        if (isRegex) {
-            if (config.get(ReplaceTransformConfig.KEY_REPLACE_FIRST)) {
-                return inputFieldValue
-                        .toString()
-                        .replaceFirst(
-                                config.get(ReplaceTransformConfig.KEY_PATTERN),
-                                config.get(ReplaceTransformConfig.KEY_REPLACEMENT));
+    //    @Override
+    //    protected void setConfig(Config pluginConfig) {
+    //        this.config = ReplaceTransformConfig.of(ReadonlyConfig.fromConfig(pluginConfig));
+    //        this.replaceFields = this.config.getReplaceFields();
+    //        this.fieldsMap =
+    // this.replaceFields.stream().collect(Collectors.groupingBy(XjReplaceConfig::getColumnName));
+    //    }
+
+    //    @Override
+    //    protected SeaTunnelRowType transformRowType(SeaTunnelRowType inputRowType) {
+    //        for (int i = 0; i < inputRowType.getFieldNames().length; i++) {
+    //            String fieldName = inputRowType.getFieldName(i);
+    //            int finalI = i;
+    //            this.replaceFields.stream().filter(x ->
+    // x.getColumnName().equalsIgnoreCase(fieldName)).forEach(x -> x.setValueIndex(finalI));
+    //        }
+    //        this.fieldsMap.forEach((k, v) -> {
+    //            filedsValueIndexMap.put(k, v.get(0).getValueIndex());
+    //        });
+    //        return inputRowType;
+    //    }
+
+    @Override
+    protected SeaTunnelRow transformRow(SeaTunnelRow inputRow) {
+        Object[] fields = inputRow.getFields();
+        Object[] outputDataArray = new Object[fields.length];
+        for (int i = 0; i < outputDataArray.length; i++) {
+            int finalI = i;
+            if (filedsValueIndexMap.containsValue(i)) {
+                Object fieldValue = inputRow.getField(i);
+                if (fieldValue != null) {
+                    String value = inputRow.getField(i).toString().replace("\0", "");
+                    String columnName = null;
+                    Optional<String> first =
+                            filedsValueIndexMap.entrySet().stream()
+                                    .filter(x -> x.getValue().equals(finalI))
+                                    .map(Map.Entry::getKey)
+                                    .findFirst();
+                    if (first.isPresent()) {
+                        columnName = first.get();
+                    }
+                    List<XjReplaceConfig> list = fieldsMap.get(columnName);
+                    for (XjReplaceConfig xjReplaceConfig : list) {
+                        value =
+                                value.replace(
+                                        xjReplaceConfig.getOldString(),
+                                        xjReplaceConfig.getNewString());
+                    }
+                    outputDataArray[finalI] = value;
+                } else {
+                    outputDataArray[finalI] = null;
+                }
+            } else {
+                outputDataArray[finalI] = inputRow.getField(i);
             }
-            return inputFieldValue
-                    .toString()
-                    .replaceAll(
-                            config.get(ReplaceTransformConfig.KEY_PATTERN),
-                            config.get(ReplaceTransformConfig.KEY_REPLACEMENT));
         }
-        return inputFieldValue
-                .toString()
-                .replace(
-                        config.get(ReplaceTransformConfig.KEY_PATTERN),
-                        config.get(ReplaceTransformConfig.KEY_REPLACEMENT));
-    }
-
-    @Override
-    protected Column getOutputColumn() {
-        List<Column> columns = inputCatalogTable.getTableSchema().getColumns();
-        List<Column> collect =
-                columns.stream()
-                        .filter(
-                                column ->
-                                        column.getName()
-                                                .equals(
-                                                        config.get(
-                                                                ReplaceTransformConfig
-                                                                        .KEY_REPLACE_FIELD)))
-                        .collect(Collectors.toList());
-        if (CollectionUtils.isEmpty(collect)) {
-            throw TransformCommonError.cannotFindInputFieldError(
-                    getPluginName(), config.get(ReplaceTransformConfig.KEY_REPLACE_FIELD));
-        }
-        return collect.get(0).copy();
+        SeaTunnelRow outputRow = new SeaTunnelRow(outputDataArray);
+        outputRow.setRowKind(inputRow.getRowKind());
+        outputRow.setTableId(inputRow.getTableId());
+        return outputRow;
     }
 }

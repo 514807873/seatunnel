@@ -29,7 +29,6 @@
 
     <properties>
         <clickhouse-jdbc.version>0.9.6</clickhouse-jdbc.version>
-        <guava.version>33.4.6-jre</guava.version>
     </properties>
 
     <dependencies>
@@ -38,16 +37,22 @@
             <artifactId>log4j-core</artifactId>
             <scope>provided</scope>
         </dependency>
+        <!--
+            使用 classifier=all：自带 relocated Guava，避免与 SeaTunnel 官方 Guava 27 冲突
+            （NoSuchMethodError: ImmutableMap$Builder.buildKeepingLast）。
+            不抬升全局 guava，优先保证 SeaTunnel 自身对 guava 的需求。
+        -->
         <dependency>
             <groupId>com.clickhouse</groupId>
             <artifactId>clickhouse-jdbc</artifactId>
             <version>${clickhouse-jdbc.version}</version>
-        </dependency>
-        <!-- clickhouse-jdbc v2 requires Guava 28+ buildKeepingLast(); override root depMgmt 27. -->
-        <dependency>
-            <groupId>com.google.guava</groupId>
-            <artifactId>guava</artifactId>
-            <version>${guava.version}</version>
+            <classifier>all</classifier>
+            <exclusions>
+                <exclusion>
+                    <groupId>*</groupId>
+                    <artifactId>*</artifactId>
+                </exclusion>
+            </exclusions>
         </dependency>
     </dependencies>
 

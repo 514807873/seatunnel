@@ -1,0 +1,529 @@
+{
+  "env": {
+    "ignoreEmptySource": true,
+    "job.mode": "BATCH",
+    "isRecordErrorData": 1,
+    "execution.parallelism": 1,
+    "maxRecordNumber": 100,
+    "job.name": "并行http"
+  },
+  "source": [
+    {
+      "schema": {
+        "fields": {
+          "inbound": "string",
+          "rankChange": "string",
+          "univUp": "string",
+          "univNameCn": "string",
+          "univNameEn": "string",
+          "indData": "string",
+          "liked": "string",
+          "univLikeCount": "string",
+          "score": "string",
+          "province": "string",
+          "univTags": "string",
+          "univNameRemark": "string",
+          "univLogo": "string",
+          "univCategory": "string",
+          "ranking": "string",
+          "rankOverall": "string"
+        }
+      },
+      "json_field": {
+        "inbound": "$.result.data.rankings.[*].inbound",
+        "rankChange": "$.result.data.rankings.[*].rankChange",
+        "univUp": "$.result.data.rankings.[*].univUp",
+        "univNameCn": "$.result.data.rankings.[*].univNameCn",
+        "univNameEn": "$.result.data.rankings.[*].univNameEn",
+        "indData": "$.result.data.rankings.[*].indData",
+        "liked": "$.result.data.rankings.[*].liked",
+        "univLikeCount": "$.result.data.rankings.[*].univLikeCount",
+        "score": "$.result.data.rankings.[*].score",
+        "province": "$.result.data.rankings.[*].province",
+        "univTags": "$.result.data.rankings.[*].univTags",
+        "univNameRemark": "$.result.data.rankings.[*].univNameRemark",
+        "univLogo": "$.result.data.rankings.[*].univLogo",
+        "univCategory": "$.result.data.rankings.[*].univCategory",
+        "ranking": "$.result.data.rankings.[*].ranking",
+        "rankOverall": "$.result.data.rankings.[*].rankOverall"
+      },
+      "method": "post",
+      "max_safe_page": 1000000,
+      "format": "json",
+      "db_datasource_id": "2082307349212565505",
+      "result_columns": [
+        {
+          "name": "inbound",
+          "type": "string",
+          "jParse": "$.result.data.rankings.[*].inbound"
+        },
+        {
+          "name": "rankChange",
+          "type": "string",
+          "jParse": "$.result.data.rankings.[*].rankChange"
+        },
+        {
+          "name": "univUp",
+          "type": "string",
+          "jParse": "$.result.data.rankings.[*].univUp"
+        },
+        {
+          "name": "univNameCn",
+          "type": "string",
+          "jParse": "$.result.data.rankings.[*].univNameCn"
+        },
+        {
+          "name": "univNameEn",
+          "type": "string",
+          "jParse": "$.result.data.rankings.[*].univNameEn"
+        },
+        {
+          "name": "indData",
+          "type": "string",
+          "jParse": "$.result.data.rankings.[*].indData"
+        },
+        {
+          "name": "liked",
+          "type": "string",
+          "jParse": "$.result.data.rankings.[*].liked"
+        },
+        {
+          "name": "univLikeCount",
+          "type": "string",
+          "jParse": "$.result.data.rankings.[*].univLikeCount"
+        },
+        {
+          "name": "score",
+          "type": "string",
+          "jParse": "$.result.data.rankings.[*].score"
+        },
+        {
+          "name": "province",
+          "type": "string",
+          "jParse": "$.result.data.rankings.[*].province"
+        },
+        {
+          "name": "univTags",
+          "type": "string",
+          "jParse": "$.result.data.rankings.[*].univTags"
+        },
+        {
+          "name": "univNameRemark",
+          "type": "string",
+          "jParse": "$.result.data.rankings.[*].univNameRemark"
+        },
+        {
+          "name": "univLogo",
+          "type": "string",
+          "jParse": "$.result.data.rankings.[*].univLogo"
+        },
+        {
+          "name": "univCategory",
+          "type": "string",
+          "jParse": "$.result.data.rankings.[*].univCategory"
+        },
+        {
+          "name": "ranking",
+          "type": "string",
+          "jParse": "$.result.data.rankings.[*].ranking"
+        },
+        {
+          "name": "rankOverall",
+          "type": "string",
+          "jParse": "$.result.data.rankings.[*].rankOverall"
+        }
+      ],
+      "result_table_name": "t1",
+      "plugin_name": "Http",
+      "url": "http://192.168.10.197:30863/db/datasource/api/page/2082307349212565505"
+    }
+  ],
+  "transform": [
+    {
+      "json_field": {
+        "provinceShort": "$.result.data.provinceShort",
+        "inbound": "$.result.data.inbound",
+        "studentInfo": "$.result.data.studentInfo",
+        "categoryName": "$.result.data.categoryName",
+        "liked": "$.result.data.liked",
+        "isVocational": "$.result.data.isVocational",
+        "rankBcur": "$.result.data.rankBcur",
+        "univLikeCount": "$.result.data.univLikeCount",
+        "outdated": "$.result.data.outdated",
+        "province": "$.result.data.province",
+        "cityName": "$.result.data.cityName",
+        "univTags": "$.result.data.univTags",
+        "intro": "$.result.data.intro",
+        "logo": "$.result.data.logo",
+        "details": "$.result.data.details",
+        "commentRk": "$.result.data.commentRk",
+        "up": "$.result.data.up",
+        "uicIntro": "$.result.data.uicIntro",
+        "cspz_univUp": "$.result.data.univUp",
+        "adminType": "$.result.data.adminType",
+        "level": "$.result.data.level",
+        "eduLevel": "$.result.data.eduLevel",
+        "nameCn": "$.result.data.nameCn",
+        "recommendStats": "$.result.data.recommendStats",
+        "commentDetail": "$.result.data.commentDetail",
+        "charCode": "$.result.data.charCode",
+        "nameEn": "$.result.data.nameEn",
+        "univEnv": "$.result.data.univEnv",
+        "univVocData": "$.result.data.univVocData",
+        "url": "$.result.data.url",
+        "cateCode": "$.result.data.cateCode",
+        "changeTime": "$.result.data.changeTime",
+        "univCode": "$.result.data.univCode",
+        "univGradeId": "$.result.data.univGradeId",
+        "univPoster": "$.result.data.univPoster",
+        "univSatis": "$.result.data.univSatis"
+      },
+      "max_safe_page": 200,
+      "parallelism": 5,
+      "result_columns": [
+        {
+          "name": "provinceShort",
+          "type": "string",
+          "jParse": "$.result.data.provinceShort"
+        },
+        {
+          "name": "inbound",
+          "type": "string",
+          "jParse": "$.result.data.inbound"
+        },
+        {
+          "name": "studentInfo",
+          "type": "string",
+          "jParse": "$.result.data.studentInfo"
+        },
+        {
+          "name": "categoryName",
+          "type": "string",
+          "jParse": "$.result.data.categoryName"
+        },
+        {
+          "name": "liked",
+          "type": "string",
+          "jParse": "$.result.data.liked"
+        },
+        {
+          "name": "isVocational",
+          "type": "string",
+          "jParse": "$.result.data.isVocational"
+        },
+        {
+          "name": "rankBcur",
+          "type": "string",
+          "jParse": "$.result.data.rankBcur"
+        },
+        {
+          "name": "univLikeCount",
+          "type": "string",
+          "jParse": "$.result.data.univLikeCount"
+        },
+        {
+          "name": "outdated",
+          "type": "string",
+          "jParse": "$.result.data.outdated"
+        },
+        {
+          "name": "province",
+          "type": "string",
+          "jParse": "$.result.data.province"
+        },
+        {
+          "name": "cityName",
+          "type": "string",
+          "jParse": "$.result.data.cityName"
+        },
+        {
+          "name": "univTags",
+          "type": "string",
+          "jParse": "$.result.data.univTags"
+        },
+        {
+          "name": "intro",
+          "type": "string",
+          "jParse": "$.result.data.intro"
+        },
+        {
+          "name": "logo",
+          "type": "string",
+          "jParse": "$.result.data.logo"
+        },
+        {
+          "name": "details",
+          "type": "string",
+          "jParse": "$.result.data.details"
+        },
+        {
+          "name": "commentRk",
+          "type": "string",
+          "jParse": "$.result.data.commentRk"
+        },
+        {
+          "name": "up",
+          "type": "string",
+          "jParse": "$.result.data.up"
+        },
+        {
+          "name": "uicIntro",
+          "type": "string",
+          "jParse": "$.result.data.uicIntro"
+        },
+        {
+          "name": "adminType",
+          "type": "string",
+          "jParse": "$.result.data.adminType"
+        },
+        {
+          "name": "level",
+          "type": "string",
+          "jParse": "$.result.data.level"
+        },
+        {
+          "name": "eduLevel",
+          "type": "string",
+          "jParse": "$.result.data.eduLevel"
+        },
+        {
+          "name": "nameCn",
+          "type": "string",
+          "jParse": "$.result.data.nameCn"
+        },
+        {
+          "name": "recommendStats",
+          "type": "string",
+          "jParse": "$.result.data.recommendStats"
+        },
+        {
+          "name": "commentDetail",
+          "type": "string",
+          "jParse": "$.result.data.commentDetail"
+        },
+        {
+          "name": "charCode",
+          "type": "string",
+          "jParse": "$.result.data.charCode"
+        },
+        {
+          "name": "nameEn",
+          "type": "string",
+          "jParse": "$.result.data.nameEn"
+        },
+        {
+          "name": "univEnv",
+          "type": "string",
+          "jParse": "$.result.data.univEnv"
+        },
+        {
+          "name": "univVocData",
+          "type": "string",
+          "jParse": "$.result.data.univVocData"
+        },
+        {
+          "name": "url",
+          "type": "string",
+          "jParse": "$.result.data.url"
+        },
+        {
+          "name": "cateCode",
+          "type": "string",
+          "jParse": "$.result.data.cateCode"
+        },
+        {
+          "name": "changeTime",
+          "type": "string",
+          "jParse": "$.result.data.changeTime"
+        },
+        {
+          "name": "univCode",
+          "type": "string",
+          "jParse": "$.result.data.univCode"
+        },
+        {
+          "name": "univGradeId",
+          "type": "string",
+          "jParse": "$.result.data.univGradeId"
+        },
+        {
+          "name": "univPoster",
+          "type": "string",
+          "jParse": "$.result.data.univPoster"
+        },
+        {
+          "name": "univSatis",
+          "type": "string",
+          "jParse": "$.result.data.univSatis"
+        },
+        {
+          "name": "cspz_univUp",
+          "type": "string"
+        }
+      ],
+      "source_table_name": [
+        "t1"
+      ],
+      "result_table_name": "t3",
+      "params_field": [
+        {
+          "name": "univUp",
+          "type": "dynamic",
+          "value": "univUp"
+        }
+      ],
+      "plugin_name": "http_transform",
+      "url": "http://192.168.10.197:30863/db/datasource/api/page/2082308102694113281"
+    }
+  ],
+  "sink": [
+    {
+      "parallelism": 1,
+      "openQuality": false,
+      "db_type": "CLICKHOUSE",
+      "primary_keys": [
+        "provinceShort"
+      ],
+      "code_mapper": {},
+      "decode_mapper": {},
+      "db_datasource_id": "1953631506162229249",
+      "source_table_name": [
+        "t3"
+      ],
+      "plugin_name": "XJJDBC",
+      "url": "jdbc:clickhouse://192.168.11.141:8123/USR_ODS_DB?socket_timeout=600000",
+      "password": "Xjcz#)M(E7UE[5RsTst64",
+      "database": "USR_ODS_DB",
+      "openTargetMiddleTable": false,
+      "driver": "com.clickhouse.jdbc.ClickHouseDriver",
+      "field_mapper": {
+        "provinceShort": "provinceShort",
+        "inbound": "inbound",
+        "studentInfo": "studentInfo",
+        "categoryName": "categoryName",
+        "liked": "liked",
+        "isVocational": "isVocational",
+        "rankBcur": "rankBcur",
+        "univLikeCount": "univLikeCount",
+        "outdated": "outdated",
+        "province": "province",
+        "cityName": "cityName",
+        "univTags": "univTags",
+        "intro": "intro",
+        "logo": "logo",
+        "details": "details",
+        "commentRk": "commentRk",
+        "up": "up",
+        "uicIntro": "uicIntro",
+        "cspz_univUp": "cspz_univUp",
+        "adminType": "adminType",
+        "level": "level",
+        "eduLevel": "eduLevel",
+        "nameCn": "nameCn",
+        "recommendStats": "recommendStats",
+        "commentDetail": "commentDetail",
+        "charCode": "charCode",
+        "nameEn": "nameEn",
+        "univEnv": "univEnv",
+        "univVocData": "univVocData",
+        "url": "url",
+        "cateCode": "cateCode",
+        "changeTime": "changeTime",
+        "univCode": "univCode",
+        "univGradeId": "univGradeId",
+        "univPoster": "univPoster",
+        "univSatis": "univSatis"
+      },
+      "user": "usr_ods",
+      "table": "TEST-HTPP1",
+      "pre_config": {
+        "cleanTableWhenCompleteNoDataIn": true,
+        "recordOperate": false,
+        "dontCompare": false,
+        "zipperFlagValue": [
+          "I",
+          "U",
+          "D"
+        ],
+        "openDelete": true,
+        "autoTimestamp": false,
+        "insertMode": "complete",
+        "autoTimestampColumnName": "",
+        "autoToBase64": true,
+        "openTargetMiddleTable": false,
+        "ignoreColumns": [],
+        "syncDeleteWhenUpsert": false,
+        "zipperColumns": [],
+        "zipperTableName": "",
+        "clusterName": "cluster_1S_3R",
+        "cleanTableWhenComplete": true,
+        "incrementMode": "update",
+        "preSql": ""
+      }
+    },
+    {
+      "openQuality": false,
+      "db_type": "CLICKHOUSE",
+      "primary_keys": [
+        "inbound"
+      ],
+      "code_mapper": {},
+      "query": "select * from `TEST-HTTP`",
+      "decode_mapper": {},
+      "db_datasource_id": "1953631506162229249",
+      "source_table_name": [
+        "t1"
+      ],
+      "plugin_name": "XJJDBC",
+      "url": "jdbc:clickhouse://192.168.11.141:8123/USR_ODS_DB?socket_timeout=600000",
+      "password": "Xjcz#)M(E7UE[5RsTst64",
+      "database": "USR_ODS_DB",
+      "openTargetMiddleTable": false,
+      "driver": "com.clickhouse.jdbc.ClickHouseDriver",
+      "field_mapper": {
+        "inbound": "inbound",
+        "rankChange": "rankChange",
+        "univUp": "univUp",
+        "univNameCn": "univNameCn",
+        "univNameEn": "univNameEn",
+        "indData": "indData",
+        "liked": "liked",
+        "univLikeCount": "univLikeCount",
+        "score": "score",
+        "province": "province",
+        "univTags": "univTags",
+        "univNameRemark": "univNameRemark",
+        "univLogo": "univLogo",
+        "univCategory": "univCategory",
+        "ranking": "ranking",
+        "rankOverall": "rankOverall"
+      },
+      "user": "usr_ods",
+      "table": "TEST-HTTP",
+      "pre_config": {
+        "cleanTableWhenCompleteNoDataIn": true,
+        "recordOperate": false,
+        "dontCompare": false,
+        "zipperFlagValue": [
+          "I",
+          "U",
+          "D"
+        ],
+        "openDelete": true,
+        "autoTimestamp": false,
+        "insertMode": "complete",
+        "autoTimestampColumnName": "",
+        "autoToBase64": true,
+        "openTargetMiddleTable": false,
+        "ignoreColumns": [],
+        "syncDeleteWhenUpsert": false,
+        "zipperColumns": [],
+        "zipperTableName": "",
+        "clusterName": "cluster_1S_3R",
+        "cleanTableWhenComplete": true,
+        "incrementMode": "update",
+        "preSql": ""
+      }
+    }
+  ]
+}

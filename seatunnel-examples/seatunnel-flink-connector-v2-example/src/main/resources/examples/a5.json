@@ -1,0 +1,199 @@
+{
+  "env": {
+    "ignoreEmptySource": true,
+    "job.mode": "BATCH",
+    "isRecordErrorData": 1,
+    "execution.parallelism": 1,
+    "maxRecordNumber": 100,
+    "job.name": "字段合列"
+  },
+  "source": [
+    {
+      "db_type": "MYSQL",
+      "columns": [
+        "id",
+        "xmmc",
+        "xmr",
+        "pm"
+      ],
+      "query": "select id,xmmc,xmr,pm from `employees`",
+      "input_type": "table",
+      "db_datasource_id": "1873681730075607042",
+      "result_columns": [
+        {
+          "fullAlias": "id",
+          "nullable": false,
+          "typeName": "INT",
+          "remark": "",
+          "type": "INT",
+          "hasQuality": false,
+          "database": "test",
+          "size": 0,
+          "autoincrement": false,
+          "name": "id",
+          "table": "employees",
+          "order": 1,
+          "primaryKey": true,
+          "sourceColumn": "1873681730075607042..employees.id"
+        },
+        {
+          "fullAlias": "xmmc",
+          "nullable": true,
+          "typeName": "VARCHAR",
+          "remark": "",
+          "type": "VARCHAR",
+          "hasQuality": false,
+          "database": "test",
+          "size": 50,
+          "autoincrement": false,
+          "name": "xmmc",
+          "table": "employees",
+          "order": 2,
+          "primaryKey": false,
+          "sourceColumn": "1873681730075607042..employees.xmmc"
+        },
+        {
+          "fullAlias": "xmr",
+          "nullable": true,
+          "typeName": "VARCHAR",
+          "remark": "",
+          "type": "VARCHAR",
+          "hasQuality": false,
+          "database": "test",
+          "size": 50,
+          "autoincrement": false,
+          "name": "xmr",
+          "table": "employees",
+          "order": 3,
+          "primaryKey": false,
+          "sourceColumn": "1873681730075607042..employees.xmr"
+        },
+        {
+          "fullAlias": "pm",
+          "nullable": true,
+          "typeName": "INT",
+          "remark": "",
+          "type": "INT",
+          "hasQuality": false,
+          "database": "test",
+          "size": 0,
+          "autoincrement": false,
+          "name": "pm",
+          "table": "employees",
+          "order": 4,
+          "primaryKey": false,
+          "sourceColumn": "1873681730075607042..employees.pm"
+        }
+      ],
+      "result_table_name": "t1",
+      "plugin_name": "JDBC",
+      "table_name": "employees",
+      "url": "jdbc:mysql://192.168.10.197:30316/test?useUnicode=yes&characterEncoding=UTF-8&useSSL=false&serverTimezone=UTC&zeroDateTimeBehavior=convertToNull&tinyInt1isBit=false&allowPublicKeyRetrieval=true",
+      "bindPars": [],
+      "password": "Admin#13579Mysql197",
+      "database": "test",
+      "driver": "com.mysql.cj.jdbc.Driver",
+      "user": "root"
+    }
+  ],
+  "transform": [
+    {
+      "key_column": [
+        "xmmc"
+      ],
+      "result_columns": [
+        {
+          "fullAlias": "xmmc",
+          "nullable": true,
+          "typeName": "VARCHAR",
+          "remark": "",
+          "type": "VARCHAR",
+          "hasQuality": false,
+          "database": "test",
+          "size": 50,
+          "autoincrement": false,
+          "name": "xmmc",
+          "table": "employees",
+          "order": 2,
+          "primaryKey": false,
+          "sourceColumn": "1873681730075607042..employees.xmmc"
+        },
+        {
+          "fullAlias": "xmr_list",
+          "nullable": true,
+          "typeName": "VARCHAR",
+          "remark": "项目人员列表",
+          "type": "VARCHAR",
+          "hasQuality": false,
+          "database": "test",
+          "size": 50,
+          "autoincrement": false,
+          "name": "xmr_list",
+          "table": "employees",
+          "order": 3,
+          "primaryKey": false,
+          "sourceColumn": "1873681730075607042..employees.xmr"
+        }
+      ],
+      "source_table_name": [
+        "t1"
+      ],
+      "result_table_name": "t3",
+      "plugin_name": "GroupConcat",
+      "merge_column": [
+        {
+          "oldColumn": "xmr",
+          "newColumn": "xmr_list",
+          "comment": "项目人员列表",
+          "separator": "|"
+        }
+      ]
+    }
+  ],
+  "sink": [
+    {
+      "db_type": "CLICKHOUSE",
+      "primary_keys": [
+        "xmmc"
+      ],
+      "code_mapper": {},
+      "decode_mapper": {},
+      "db_datasource_id": "1953631506162229249",
+      "source_table_name": [
+        "t3"
+      ],
+      "plugin_name": "XJJDBC",
+      "url": "jdbc:clickhouse://192.168.11.141:8123,192.168.11.142:8123/USR_ODS_DB?socket_timeout=600000",
+      "password": "Xjcz#)M(E7UE[5RsTst64",
+      "database": "USR_ODS_DB",
+      "driver": "com.clickhouse.jdbc.ClickHouseDriver",
+      "field_mapper": {
+        "xmmc": "xmmc",
+        "xmr_list": "xmr_list"
+      },
+      "batchSize": 1000,
+      "user": "usr_ods",
+      "table": "XM_LIST",
+      "pre_config": {
+        "cleanTableWhenCompleteNoDataIn": true,
+        "recordOperate": false,
+        "dontCompare": false,
+        "zipperFlagValue": [
+          "I",
+          "U",
+          "D"
+        ],
+        "openDelete": true,
+        "autoTimestamp": false,
+        "insertMode": "complete",
+        "ignoreColumns": [],
+        "zipperColumns": [],
+        "zipperTableName": "",
+        "clusterName": "cluster_1S_3R",
+        "cleanTableWhenComplete": true,
+        "incrementMode": "update",
+        "preSql": ""
+      }
+    }
+  ]
+}

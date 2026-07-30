@@ -75,6 +75,7 @@ public class HttpSourceReader extends AbstractSingleSplitReader<SeaTunnelRow> {
             Configuration.defaultConfiguration().addOptions(DEFAULT_OPTIONS);
     private boolean noMoreElementFlag = true;
     private Optional<PageInfo> pageInfoOptional = Optional.empty();
+    private Long offset = 0L;
     /**
      * Holds the original request body template for placeholder replacement. This ensures that the
      * state is not unintentionally mutated during pagination.
@@ -344,25 +345,36 @@ public class HttpSourceReader extends AbstractSingleSplitReader<SeaTunnelRow> {
                 PageInfo info = pageInfoOptional.get();
                 // cursor pagination
                 if (HttpPaginationType.CURSOR.getCode().equals(info.getPageType())) {
+                    Long pageIndex = 1L;
                     while (!noMoreElementFlag) {
+                        checkMaxSafePage(pageIndex);
                         updateRequestParam(info, info.isUsePlaceholderReplacement());
+                        injectDynamicMethodToBody();
                         pollAndCollectData(output);
+                        pageIndex += 1;
                         Thread.sleep(10);
                     }
                 } else {
                     // default page number pagination
                     Long pageIndex = info.getPageIndex();
                     while (!noMoreElementFlag) {
-                        // increment page
-                        info.setPageIndex(pageIndex);
-                        // set request param
+                        checkMaxSafePage(pageIndex);
+                        if ("offset".equalsIgnoreCase(info.getPageField())) {
+                            info.setPageIndex(offset);
+                        } else {
+                            info.setPageIndex(pageIndex);
+                        }
                         updateRequestParam(info, info.isUsePlaceholderReplacement());
+                        injectDynamicMethodToBody();
                         pollAndCollectData(output);
                         pageIndex += 1;
                         Thread.sleep(10);
                     }
                 }
+            } else if (isBodySizePagination()) {
+                pollBodySizePagination(output);
             } else {
+                injectDynamicMethodToBody();
                 pollAndCollectData(output);
             }
         } finally {
@@ -378,6 +390,58 @@ public class HttpSourceReader extends AbstractSingleSplitReader<SeaTunnelRow> {
         }
     }
 
+    private void pollBodySizePagination(Collector<SeaTunnelRow> output) throws Exception {
+        noMoreElementFlag = false;
+        Long pageIndex = 1L;
+        Map<String, Object> jsonBody = parseBodyAsMap(this.httpParameter.getBody());
+        while (!noMoreElementFlag) {
+            checkMaxSafePage(pageIndex);
+            if (!Strings.isNullOrEmpty(this.httpParameter.getDynamicMethod())) {
+                jsonBody.put("method", this.httpParameter.getDynamicMethod());
+            }
+            this.httpParameter.setBody(JsonUtils.toJsonString(jsonBody));
+            pollAndCollectData(output);
+            pageIndex += 1;
+            if (jsonBody.containsKey("current")) {
+                jsonBody.put("current", pageIndex);
+            }
+            if (jsonBody.containsKey("offset")) {
+                jsonBody.put("offset", offset);
+            }
+            Thread.sleep(10);
+        }
+    }
+
+    private boolean isBodySizePagination() {
+        Map<String, Object> jsonBody = parseBodyAsMap(this.httpParameter.getBody());
+        return jsonBody.containsKey("size");
+    }
+
+    private Map<String, Object> parseBodyAsMap(String body) {
+        if (Strings.isNullOrEmpty(body)) {
+            return new HashMap<>();
+        }
+        Map<String, Object> jsonBody =
+                JsonUtils.parseObject(body, new TypeReference<Map<String, Object>>() {});
+        return jsonBody == null ? new HashMap<>() : jsonBody;
+    }
+
+    private void injectDynamicMethodToBody() {
+        if (Strings.isNullOrEmpty(this.httpParameter.getDynamicMethod())) {
+            return;
+        }
+        Map<String, Object> jsonBody = parseBodyAsMap(this.httpParameter.getBody());
+        jsonBody.put("method", this.httpParameter.getDynamicMethod());
+        this.httpParameter.setBody(JsonUtils.toJsonString(jsonBody));
+    }
+
+    private void checkMaxSafePage(Long pageIndex) {
+        if (pageIndex != null && pageIndex > this.httpParameter.getMaxSafePage()) {
+            throw new RuntimeException(
+                    "Pagination exceeded max_safe_page=" + this.httpParameter.getMaxSafePage());
+        }
+    }
+
     private void collect(Collector<SeaTunnelRow> output, String data) throws IOException {
         String contentData = data;
         if (contentJson != null) {
@@ -386,6 +450,11 @@ public class HttpSourceReader extends AbstractSingleSplitReader<SeaTunnelRow> {
         if (jsonField != null && contentJson == null) {
             this.initJsonPath(jsonField);
             contentData = JsonUtils.toJsonNode(parseToMap(decodeJSON(data), jsonField)).toString();
+            if (isAllAttributesNullInObjects(contentData)) {
+                log.info("Detected empty json array from http response, stop pagination");
+                noMoreElementFlag = true;
+                return;
+            }
         }
         // page
         if (pageInfoOptional.isPresent()) {
@@ -418,8 +487,56 @@ public class HttpSourceReader extends AbstractSingleSplitReader<SeaTunnelRow> {
                     noMoreElementFlag = readSize < pageInfo.getBatchSize();
                 }
             }
+        } else if (isBodySizePagination()) {
+            Map<String, Object> jsonBody = parseBodyAsMap(this.httpParameter.getBody());
+            Object sizeValue = jsonBody.get("size");
+            int pageSize =
+                    sizeValue instanceof Number
+                            ? ((Number) sizeValue).intValue()
+                            : Integer.parseInt(String.valueOf(sizeValue));
+            int readSize = JsonUtils.stringToJsonNode(contentData).size();
+            noMoreElementFlag = readSize < pageSize;
         }
         deserializationCollector.collect(contentData.getBytes(), output);
+        updateOffsetFromResponse(data);
+    }
+
+    private void updateOffsetFromResponse(String data) {
+        if (httpParameter.getOffsetJsonPath() == null) {
+            return;
+        }
+        try {
+            Object value = JsonPath.read(data, httpParameter.getOffsetJsonPath());
+            if (value != null) {
+                offset = Long.parseLong(value.toString());
+            }
+        } catch (Exception e) {
+            throw new RuntimeException(
+                    "Failed to parse offset from response by path: "
+                            + httpParameter.getOffsetJsonPath(),
+                    e);
+        }
+    }
+
+    private boolean isAllAttributesNullInObjects(String jsonArrayString) {
+        try {
+            List<Map<String, Object>> list =
+                    JsonUtils.parseObject(
+                            jsonArrayString, new TypeReference<List<Map<String, Object>>>() {});
+            if (list == null || list.isEmpty()) {
+                return true;
+            }
+            for (Map<String, Object> object : list) {
+                for (Object value : object.values()) {
+                    if (value != null) {
+                        return false;
+                    }
+                }
+            }
+            return true;
+        } catch (Exception e) {
+            throw new RuntimeException("Error parsing JSON array string", e);
+        }
     }
 
     private List<List<String>> decodeJSON(String data) {

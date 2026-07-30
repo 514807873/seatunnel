@@ -153,4 +153,24 @@ public class HttpSourceOptions extends HttpCommonOptions {
                     .booleanType()
                     .defaultValue(false)
                     .withDescription("When the json field is missing, return null");
+
+    public static final Option<String> DYNAMIC_METHOD =
+            Options.key("dynamicMethod")
+                    .stringType()
+                    .noDefaultValue()
+                    .withDescription(
+                            "Inject method name into JSON request body field 'method' for RPC-style APIs");
+
+    public static final Option<String> OFFSET =
+            Options.key("offset")
+                    .stringType()
+                    .noDefaultValue()
+                    .withDescription(
+                            "JsonPath used to extract next offset value from HTTP response");
+
+    public static final Option<Integer> MAX_SAFE_PAGE =
+            Options.key("max_safe_page")
+                    .intType()
+                    .defaultValue(100000)
+                    .withDescription("Maximum pagination loops to prevent infinite page requests");
 }

@@ -92,6 +92,7 @@
         <module>connector-fluss</module>
         <module>connector-lance</module>
         <module>connector-xjjdbc</module>
+        <module>connector-sqlcdc</module>
     </modules>
 
     <dependencyManagement>

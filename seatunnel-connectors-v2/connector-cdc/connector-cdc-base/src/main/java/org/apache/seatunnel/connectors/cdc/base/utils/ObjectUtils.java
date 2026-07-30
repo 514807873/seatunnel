@@ -17,8 +17,14 @@
 
 package org.apache.seatunnel.connectors.cdc.base.utils;
 
+import java.io.BufferedReader;
+import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.io.OutputStream;
 import java.math.BigDecimal;
 import java.math.BigInteger;
+import java.net.HttpURLConnection;
+import java.net.URL;
 
 /** Utilities for operation on {@link Object}. */
 public class ObjectUtils {
@@ -105,5 +111,34 @@ public class ObjectUtils {
         BigDecimal bigDecimal1 = BigDecimal.valueOf(arg1);
         BigDecimal bigDecimal2 = BigDecimal.valueOf(arg2);
         return bigDecimal1.compareTo(bigDecimal2);
+    }
+
+    /** POST JSON to ST service (CDC offset reporting). */
+    public static String sendPostRequest(String url, String data) throws Exception {
+        URL apiUrl = new URL(url);
+        HttpURLConnection con = (HttpURLConnection) apiUrl.openConnection();
+        String result = null;
+        con.setRequestMethod("POST");
+        con.setRequestProperty("Content-Type", "application/json");
+        con.setRequestProperty("Accept", "application/json");
+        con.setDoOutput(true);
+        OutputStream outputStream = con.getOutputStream();
+        outputStream.write(data.getBytes());
+        outputStream.flush();
+        outputStream.close();
+
+        int responseCode = con.getResponseCode();
+        if (responseCode == HttpURLConnection.HTTP_OK) {
+            InputStream is = con.getInputStream();
+            BufferedReader br = new BufferedReader(new InputStreamReader(is, "UTF-8"));
+            StringBuffer stringBuffer1 = new StringBuffer();
+            String line;
+            while ((line = br.readLine()) != null) {
+                stringBuffer1.append(line);
+            }
+            result = stringBuffer1.toString();
+        }
+        con.disconnect();
+        return result;
     }
 }

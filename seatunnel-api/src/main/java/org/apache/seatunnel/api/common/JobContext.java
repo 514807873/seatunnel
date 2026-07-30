@@ -32,7 +32,9 @@ public final class JobContext implements Serializable {
 
     private JobMode jobMode;
     private boolean enableCheckpoint;
-    private final String jobId;
+    private String jobId;
+    private int isRecordErrorData;
+    private int maxRecordNumber;
 
     public JobContext() {
         this.jobId = UUID.randomUUID().toString().replace("-", "");
@@ -50,5 +52,17 @@ public final class JobContext implements Serializable {
     public JobContext setEnableCheckpoint(boolean enableCheckpoint) {
         this.enableCheckpoint = enableCheckpoint;
         return this;
+    }
+
+    public void setJobId(String jobId) {
+        this.jobId = jobId;
+    }
+
+    public void setIsRecordErrorData(int isRecordErrorData) {
+        this.isRecordErrorData = isRecordErrorData;
+    }
+
+    public void setMaxRecordNumber(int maxRecordNumber) {
+        this.maxRecordNumber = maxRecordNumber;
     }
 }
