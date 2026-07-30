@@ -35,6 +35,7 @@ public class HttpTransform extends AbstractCatalogSupportTransform {
     public static String PLUGIN_NAME = "http_transform";
     private HttpTransformConfig config;
     private List<Column> outputColumns = new ArrayList<>();
+    private int subtaskIndex = -1;
     private static final Configuration jsonConfiguration =
             Configuration.defaultConfiguration().addOptions(Option.SUPPRESS_EXCEPTIONS, Option.ALWAYS_RETURN_LIST, Option.DEFAULT_PATH_LEAF_TO_NULL);
 
@@ -47,6 +48,11 @@ public class HttpTransform extends AbstractCatalogSupportTransform {
     @Override
     public String getPluginName() {
         return PLUGIN_NAME;
+    }
+
+    @Override
+    public void setSubtaskIndex(int subtaskIndex) {
+        this.subtaskIndex = subtaskIndex;
     }
 
 
@@ -98,7 +104,7 @@ public class HttpTransform extends AbstractCatalogSupportTransform {
                                 for (Map.Entry<String, String> entry : jsonField.entrySet()) {
                                     String key = entry.getKey();
                                     String value = entry.getValue();
-                                    List<String> valuesList = ctx.read(value);
+                                    List<?> valuesList = ctx.read(value);
                                     if (key.startsWith("cspz_") && areAllNull(valuesList)) {
                                         List<String> newValuesList = new ArrayList<>();
                                         valuesList.forEach(item -> {
@@ -107,7 +113,7 @@ public class HttpTransform extends AbstractCatalogSupportTransform {
                                         dataSet.put(key, newValuesList);
                                     }
                                     else {
-                                        dataSet.put(key, valuesList);
+                                        dataSet.put(key, toStringList(valuesList));
                                     }
                                 }
                             }
@@ -119,16 +125,16 @@ public class HttpTransform extends AbstractCatalogSupportTransform {
                                 }
                                 rows.add(new SeaTunnelRow(fields));
                             }
-                            System.out.println("请求参数" + obj);
+                            log.info("subtask={}, 请求参数{}", subtaskIndex, obj);
                             loop_count++;
                             if (new ArrayList<>(dataSet.values()).get(0).size() < Long.parseLong(pagesParams.get("size"))) {
                                 loop_count = 0;
-                                System.out.println("没有更多数据,总共" + rows.size() + "条数据");
+                                log.info("没有更多数据,总共" + rows.size() + "条数据");
                             }
                             obj.putOpt("current", loop_count + "");
                         }
                         else {
-                            System.err.println("Error: " + response.getStatus() + ", " + response.body());
+                            log.error("Error: " + response.getStatus() + ", " + response.body());
                         }
                     } catch (Exception e) {
                         throw new RuntimeException(e);
@@ -141,7 +147,6 @@ public class HttpTransform extends AbstractCatalogSupportTransform {
             }
         }
         else {
-            System.out.println("不需要分页的请求");
             try (HttpResponse response = HttpRequest.post(config.getUrl())
                     .header("Content-Type", "application/json")
                     .body(obj.toString())
@@ -154,7 +159,7 @@ public class HttpTransform extends AbstractCatalogSupportTransform {
                         for (Map.Entry<String, String> entry : jsonField.entrySet()) {
                             String key = entry.getKey();
                             String value = entry.getValue();
-                            List<String> valuesList = ctx.read(value);
+                            List<?> valuesList = ctx.read(value);
                             if (key.startsWith("cspz_") && areAllNull(valuesList)) {
                                 List<String> newValuesList = new ArrayList<>();
                                 valuesList.forEach(item -> {
@@ -163,7 +168,7 @@ public class HttpTransform extends AbstractCatalogSupportTransform {
                                 dataSet.put(key, newValuesList);
                             }
                             else {
-                                dataSet.put(key, valuesList);
+                                dataSet.put(key, toStringList(valuesList));
                             }
                         }
                     }
@@ -175,10 +180,10 @@ public class HttpTransform extends AbstractCatalogSupportTransform {
                         }
                         rows.add(new SeaTunnelRow(fields));
                     }
-                    System.out.println("请求参数" + obj);
+                    log.info("subtask={}, 请求参数{}", subtaskIndex, obj);
                 }
                 else {
-                    System.err.println("Error: " + response.getStatus() + ", " + response.body());
+                    log.error("Error: " + response.getStatus() + ", " + response.body());
                 }
             } catch (Exception e) {
                 throw new RuntimeException(e);
@@ -209,12 +214,26 @@ public class HttpTransform extends AbstractCatalogSupportTransform {
         return inputCatalogTable.getTableId().copy();
     }
 
-    private boolean areAllNull(List<String> list) {
-        for (String element : list) {
+    private boolean areAllNull(List<?> list) {
+        if (list == null || list.isEmpty()) {
+            return true;
+        }
+        for (Object element : list) {
             if (element != null) {
-                return false; // 只要有一个元素不为null，就返回false
+                return false;
             }
         }
-        return true; // 所有元素都为null时，返回true
+        return true;
+    }
+
+    private List<String> toStringList(List<?> list) {
+        List<String> result = new ArrayList<>();
+        if (list == null) {
+            return result;
+        }
+        for (Object element : list) {
+            result.add(element == null ? null : StrUtil.toString(element));
+        }
+        return result;
     }
 }

@@ -22,8 +22,10 @@ import org.apache.flink.streaming.api.functions.ProcessFunction;
 import org.apache.flink.table.api.Table;
 import org.apache.flink.table.api.bridge.java.StreamTableEnvironment;
 import org.apache.flink.util.Collector;
+import org.apache.seatunnel.api.common.CommonOptions;
 import org.apache.seatunnel.api.common.GroupConcatQueryResult;
 import org.apache.seatunnel.api.table.type.RowKind;
+import org.apache.seatunnel.common.constants.JobMode;
 import org.apache.seatunnel.shade.com.typesafe.config.Config;
 
 import org.apache.seatunnel.api.common.JobContext;
@@ -40,16 +42,26 @@ import org.apache.seatunnel.plugin.discovery.seatunnel.SeaTunnelTransformPluginD
 import org.apache.seatunnel.translation.flink.serialization.FlinkRowConverter;
 import org.apache.seatunnel.translation.flink.utils.TypeConverterUtils;
 
-import org.apache.flink.api.common.functions.FlatMapFunction;
+import org.apache.flink.api.common.functions.RichFlatMapFunction;
 import org.apache.flink.api.common.typeinfo.TypeInformation;
+import org.apache.flink.api.java.tuple.Tuple2;
+import org.apache.flink.configuration.Configuration;
 import org.apache.flink.streaming.api.datastream.DataStream;
+import org.apache.flink.streaming.api.datastream.SingleOutputStreamOperator;
+import org.apache.flink.streaming.api.operators.AbstractStreamOperator;
+import org.apache.flink.streaming.api.operators.BoundedOneInput;
+import org.apache.flink.streaming.api.operators.OneInputStreamOperator;
+import org.apache.flink.streaming.runtime.streamrecord.StreamRecord;
 import org.apache.flink.types.Row;
 
 import java.net.URL;
 import java.sql.ResultSet;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.Objects;
 import java.util.stream.Collectors;
 
 import static org.apache.seatunnel.api.common.CommonOptions.RESULT_TABLE_NAME;
@@ -107,8 +119,10 @@ public class TransformExecuteProcessor
                 DataStream<Row> inputStream;
                 if ("SQL".equalsIgnoreCase(transform.getPluginName()) && pluginConfig.hasPath("engine")
                     && "FLINK".equalsIgnoreCase(pluginConfig.getString("engine"))) {
+                    boolean batchJoin = JobMode.BATCH.equals(jobContext.getJobMode());
                     inputStream = joinStream(pluginConfig);
-                    registerResultTable(pluginConfig, inputStream, false);
+                    // BATCH 关联结果按 append 注册，避免下游再按 changelog 二次转换
+                    registerResultTable(pluginConfig, inputStream, batchJoin);
                     upstreamDataStreams.add(
                             new DataStreamTableInfo(
                                     inputStream,
@@ -120,6 +134,10 @@ public class TransformExecuteProcessor
                 else {
                     // TODO: 暂时取第一个元素
                     inputStream = flinkTransform(sourceType.get(0), transform, streamList.get(0).getDataStream());
+                    if (pluginConfig.hasPath(CommonOptions.PARALLELISM.key())) {
+                        int parallelism = pluginConfig.getInt(CommonOptions.PARALLELISM.key());
+                        ((SingleOutputStreamOperator<Row>) inputStream).setParallelism(parallelism);
+                    }
                     registerResultTable(pluginConfig, inputStream, false);
                     upstreamDataStreams.add(
                             new DataStreamTableInfo(
@@ -153,33 +171,51 @@ public class TransformExecuteProcessor
                 new FlinkRowConverter(transform.getProducedCatalogTable().getSeaTunnelRowType());
         DataStream<Row> output =
                 stream.flatMap(
-                        (FlatMapFunction<Row, Row>)
-                                (value, out) -> {
-                                    SeaTunnelRow seaTunnelRow =
-                                            transformInputRowConverter.reconvert(value);
-                                    if (transform.getPluginName().equalsIgnoreCase("http_transform") ||
-                                        transform.getPluginName().equalsIgnoreCase("SplitColumnValue")
-                                    ) {
-                                        List<SeaTunnelRow> list = transform.mapList(seaTunnelRow);
-                                        if (!list.isEmpty()) {
-                                            for (SeaTunnelRow dataRow : list) {
-                                                Row copy = transformOutputRowConverter.convert(dataRow);
-                                                out.collect(copy);
-                                            }
-                                        }
-                                    }
-                                    else {
-                                        SeaTunnelRow dataRow =
-                                                (SeaTunnelRow) transform.map(seaTunnelRow);
-                                        if (dataRow != null) {
-                                            Row copy = transformOutputRowConverter.convert(dataRow);
-                                            out.collect(copy);
-                                        }
-                                    }
-
-                                },
+                        new TransformFlatMapFunction(
+                                transform, transformInputRowConverter, transformOutputRowConverter),
                         rowTypeInfo);
         return output;
+    }
+
+    private static class TransformFlatMapFunction extends RichFlatMapFunction<Row, Row> {
+        private final SeaTunnelTransform transform;
+        private final FlinkRowConverter transformInputRowConverter;
+        private final FlinkRowConverter transformOutputRowConverter;
+
+        private TransformFlatMapFunction(
+                SeaTunnelTransform transform,
+                FlinkRowConverter transformInputRowConverter,
+                FlinkRowConverter transformOutputRowConverter) {
+            this.transform = transform;
+            this.transformInputRowConverter = transformInputRowConverter;
+            this.transformOutputRowConverter = transformOutputRowConverter;
+        }
+
+        @Override
+        public void open(Configuration parameters) {
+            transform.setSubtaskIndex(getRuntimeContext().getIndexOfThisSubtask());
+        }
+
+        @Override
+        public void flatMap(Row value, Collector<Row> out) throws Exception {
+            SeaTunnelRow seaTunnelRow = transformInputRowConverter.reconvert(value);
+            if (transform.getPluginName().equalsIgnoreCase("http_transform")
+                    || transform.getPluginName().equalsIgnoreCase("SplitColumnValue")) {
+                List<SeaTunnelRow> list = transform.mapList(seaTunnelRow);
+                if (!list.isEmpty()) {
+                    for (SeaTunnelRow dataRow : list) {
+                        Row copy = transformOutputRowConverter.convert(dataRow);
+                        out.collect(copy);
+                    }
+                }
+            } else {
+                SeaTunnelRow dataRow = (SeaTunnelRow) transform.map(seaTunnelRow);
+                if (dataRow != null) {
+                    Row copy = transformOutputRowConverter.convert(dataRow);
+                    out.collect(copy);
+                }
+            }
+        }
     }
 
     protected DataStream<Row> flinkTransformGroupConcat(
@@ -267,9 +303,72 @@ public class TransformExecuteProcessor
         StreamTableEnvironment tableEnv = flinkRuntimeEnvironment.getStreamTableEnvironment();
         Table joinTable = tableEnv.sqlQuery(pluginConfig.getString("query"));
         TypeInformation<Row> typeInfo = joinTable.getSchema().toRowType();
-        return tableEnv.toRetractStream(joinTable, typeInfo)
-                .filter(row -> row.f0)
-                .map(row -> row.f1)
-                .returns(typeInfo);
+        DataStream<Tuple2<Boolean, Row>> retractStream =
+                tableEnv.toRetractStream(joinTable, typeInfo);
+
+        // BATCH: 在 endInput 物化 retract，按左表业务键保留最后一条，去掉 LEFT JOIN 中间空关联行
+        if (JobMode.BATCH.equals(jobContext.getJobMode())) {
+            return retractStream
+                    .transform(
+                            "retract-batch-materialize",
+                            typeInfo,
+                            new RetractBatchMaterializeOperator())
+                    .name("retract-batch-materialize");
+        }
+
+        return retractStream.filter(row -> row.f0).map(row -> row.f1).returns(typeInfo);
+    }
+
+    /**
+     * BATCH 专用：消费 retract 流，输入结束时只输出每个左表键的最终行。
+     * LEFT JOIN 常见序列为 +I(空右表) -> -D(空右表) -> +I(有关联)，只保留最后一次 +I。
+     */
+    private static class RetractBatchMaterializeOperator
+            extends AbstractStreamOperator<Row>
+            implements OneInputStreamOperator<Tuple2<Boolean, Row>, Row>, BoundedOneInput {
+
+        private final Map<String, Row> latestByLeftKey = new HashMap<>();
+
+        @Override
+        public void processElement(StreamRecord<Tuple2<Boolean, Row>> element) {
+            Tuple2<Boolean, Row> value = element.getValue();
+            Row row = Row.copy(value.f1);
+            String key = leftKey(row);
+            if (Boolean.TRUE.equals(value.f0)) {
+                latestByLeftKey.put(key, row);
+            } else {
+                Row current = latestByLeftKey.get(key);
+                if (current != null && Objects.equals(rowKey(current), rowKey(row))) {
+                    latestByLeftKey.remove(key);
+                }
+            }
+        }
+
+        @Override
+        public void endInput() {
+            for (Row row : latestByLeftKey.values()) {
+                output.collect(new StreamRecord<>(row));
+            }
+            latestByLeftKey.clear();
+        }
+
+        /** 左表业务键：姓名 + 论文名称（对应 SELECT 前两段左表字段中的第 0、2 列） */
+        private static String leftKey(Row row) {
+            return Objects.toString(row.getField(0), "")
+                    + '\u0000'
+                    + Objects.toString(row.getField(2), "");
+        }
+
+        private static String rowKey(Row row) {
+            StringBuilder sb = new StringBuilder();
+            int arity = row.getArity();
+            for (int i = 0; i < arity; i++) {
+                if (i > 0) {
+                    sb.append('\u0001');
+                }
+                sb.append(Objects.toString(row.getField(i), ""));
+            }
+            return sb.toString();
+        }
     }
 }

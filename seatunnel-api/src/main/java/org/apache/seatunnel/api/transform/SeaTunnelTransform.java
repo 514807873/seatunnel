@@ -32,6 +32,9 @@ public interface SeaTunnelTransform<T>
     /** call it when Transformer initialed */
     default void open() {}
 
+    /** Inject Flink/Spark subtask index for logging or diagnostics. Default no-op. */
+    default void setSubtaskIndex(int subtaskIndex) {}
+
     /**
      * Set the data type info of input data.
      *

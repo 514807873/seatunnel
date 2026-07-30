@@ -168,7 +168,11 @@ public abstract class FlinkAbstractPluginExecuteProcessor<T>
                         dataStream,
                         resultTable,
                         isAppend);
-                registerAppendStream(pluginConfig);
+                if (Boolean.TRUE.equals(isAppend)) {
+                    IS_APPEND_STREAM_MAP.put(resultTable, true);
+                } else {
+                    registerAppendStream(pluginConfig);
+                }
                 return;
             }
             flinkRuntimeEnvironment.registerResultTable(

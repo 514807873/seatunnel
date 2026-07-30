@@ -37,8 +37,12 @@ import org.apache.seatunnel.api.table.type.BasicType;
 import org.apache.seatunnel.api.table.type.LocalTimeType;
 import org.apache.seatunnel.api.table.type.SeaTunnelDataType;
 import org.apache.seatunnel.connectors.seatunnel.jdbc.catalog.JdbcCatalogOptions;
+import org.apache.seatunnel.connectors.seatunnel.jdbc.config.JdbcConnectionConfig;
 import org.apache.seatunnel.connectors.seatunnel.jdbc.config.JdbcOptions;
 import org.apache.seatunnel.connectors.seatunnel.jdbc.config.JdbcSinkConfig;
+import org.apache.seatunnel.connectors.seatunnel.jdbc.exception.JdbcConnectorErrorCode;
+import org.apache.seatunnel.connectors.seatunnel.jdbc.exception.JdbcConnectorException;
+import org.apache.seatunnel.connectors.seatunnel.jdbc.internal.connection.SimpleJdbcConnectionProvider;
 import org.apache.seatunnel.connectors.seatunnel.jdbc.internal.dialect.JdbcDialect;
 import org.apache.seatunnel.connectors.seatunnel.jdbc.internal.dialect.JdbcDialectLoader;
 import org.apache.seatunnel.connectors.seatunnel.jdbc.internal.dialect.dialectenum.FieldIdeEnum;
@@ -48,6 +52,10 @@ import org.apache.commons.lang3.StringUtils;
 
 import com.google.auto.service.AutoService;
 
+import java.sql.Connection;
+import java.sql.DatabaseMetaData;
+import java.sql.ResultSet;
+import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.HashMap;
@@ -89,6 +97,10 @@ import static org.apache.seatunnel.connectors.seatunnel.jdbc.config.JdbcOptions.
 
 @AutoService(Factory.class)
 public class JdbcSinkFactory implements TableSinkFactory {
+
+    private static final String OPERATE_FLAG_COLUMN = "operateflag";
+    private static final String OPERATE_TIME_COLUMN = "operatetime";
+
     @Override
     public String factoryIdentifier() {
         return "Jdbc";
@@ -125,15 +137,6 @@ public class JdbcSinkFactory implements TableSinkFactory {
                     newColumns.add(newColumn);
                 }
             }
-            if (config.getOptional(recordOperation).isPresent()) {
-                if (config.getOptional(recordOperation).get()) {
-                    Column operateFlag = PhysicalColumn.of("operateflag", BasicType.STRING_TYPE, 30, false, "I", "");
-                    Column operateTime = PhysicalColumn.of("operatetime", LocalTimeType.LOCAL_DATE_TIME_TYPE, 30,
-                            false, new Date(), "");
-                    newColumns.add(operateFlag);
-                    newColumns.add(operateTime);
-                }
-            }
 
             if (null != primaryKey) {
                 List<String> columnNames = primaryKey.getColumnNames();
@@ -142,25 +145,6 @@ public class JdbcSinkFactory implements TableSinkFactory {
                 }
             }
         }
-        TableSchema newtableSchema = null;
-        if (primaryKey != null) {
-            PrimaryKey newPrimaryKey = PrimaryKey.of(catalogTable.getTableSchema().getPrimaryKey().getPrimaryKey(), newPrimaryKeyColumnNames);
-            newtableSchema =
-                    TableSchema.builder()
-                            .columns(newColumns)
-                            .primaryKey(newPrimaryKey)
-                            .constraintKey(catalogTable.getTableSchema().getConstraintKeys())
-                            .build();
-        }
-        else {
-            newtableSchema =
-                    TableSchema.builder()
-                            .columns(newColumns)
-                            .constraintKey(catalogTable.getTableSchema().getConstraintKeys())
-                            .build();
-        }
-
-
         ReadonlyConfig catalogOptions = getCatalogOptions(context);
         Optional<String> optionalTable = config.getOptional(TABLE);
         Optional<String> optionalDatabase = config.getOptional(DATABASE);
@@ -221,6 +205,36 @@ public class JdbcSinkFactory implements TableSinkFactory {
         String finalTableName = sinkTableName;
         if (StringUtils.isNotEmpty(sourceTableName)) {
             finalTableName = tempTableName.replace(REPLACE_TABLE_NAME_KEY, sourceTableName);
+        }
+
+        // recordOperation=true 时，从目标库读取 operateflag/operatetime 的真实列名
+        // （忽略大小写匹配），保证生成 SQL 的列名大小写与数据库一致；缺列直接报错
+        if (optionalFieldMapper.isPresent()
+                && config.getOptional(recordOperation).orElse(false)) {
+            appendOperationColumns(
+                    newColumns,
+                    JdbcConnectionConfig.of(config),
+                    finalDatabaseName,
+                    finalSchemaName,
+                    finalTableName);
+        }
+
+        TableSchema newtableSchema;
+        if (primaryKey != null) {
+            PrimaryKey newPrimaryKey = PrimaryKey.of(catalogTable.getTableSchema().getPrimaryKey().getPrimaryKey(), newPrimaryKeyColumnNames);
+            newtableSchema =
+                    TableSchema.builder()
+                            .columns(newColumns)
+                            .primaryKey(newPrimaryKey)
+                            .constraintKey(catalogTable.getTableSchema().getConstraintKeys())
+                            .build();
+        }
+        else {
+            newtableSchema =
+                    TableSchema.builder()
+                            .columns(newColumns)
+                            .constraintKey(catalogTable.getTableSchema().getConstraintKeys())
+                            .build();
         }
 
         // rebuild TableIdentifier and catalogTable
@@ -300,6 +314,110 @@ public class JdbcSinkFactory implements TableSinkFactory {
                         schemaSaveMode,
                         dataSaveMode,
                         finalCatalogTable);
+    }
+
+    /**
+     * recordOperation=true 时追加操作标识、操作时间两列，列名以目标库实际存在的列为准
+     * （忽略大小写匹配），缺任一列直接报错。
+     */
+    private void appendOperationColumns(
+            List<Column> newColumns,
+            JdbcConnectionConfig connectionConfig,
+            String databaseName,
+            String schemaName,
+            String tableName) {
+        Map<String, String> realColumns =
+                queryRealColumns(connectionConfig, databaseName, schemaName, tableName);
+        String flagColumnName = realColumns.get(OPERATE_FLAG_COLUMN);
+        String timeColumnName = realColumns.get(OPERATE_TIME_COLUMN);
+        List<String> missingColumns = new ArrayList<>();
+        if (flagColumnName == null) {
+            missingColumns.add(OPERATE_FLAG_COLUMN);
+        }
+        if (timeColumnName == null) {
+            missingColumns.add(OPERATE_TIME_COLUMN);
+        }
+        if (!missingColumns.isEmpty()) {
+            throw new JdbcConnectorException(
+                    JdbcConnectorErrorCode.NO_SUPPORT_OPERATION_FAILED,
+                    String.format(
+                            "目标表 [%s] 缺少字段 %s，recordOperation=true 时这些字段必须存在",
+                            buildTableLabel(databaseName, schemaName, tableName), missingColumns));
+        }
+        newColumns.add(
+                PhysicalColumn.of(flagColumnName, BasicType.STRING_TYPE, 30, false, "I", ""));
+        newColumns.add(
+                PhysicalColumn.of(
+                        timeColumnName,
+                        LocalTimeType.LOCAL_DATE_TIME_TYPE,
+                        30,
+                        false,
+                        new Date(),
+                        ""));
+    }
+
+    /** 读取目标表真实列名，返回 key 为列名小写、value 为数据库原始列名的映射。 */
+    private Map<String, String> queryRealColumns(
+            JdbcConnectionConfig connectionConfig,
+            String databaseName,
+            String schemaName,
+            String tableName) {
+        SimpleJdbcConnectionProvider connectionProvider =
+                new SimpleJdbcConnectionProvider(connectionConfig);
+        try {
+            Connection connection = connectionProvider.getOrEstablishConnection();
+            Map<String, String> columns =
+                    readColumns(connection, databaseName, schemaName, tableName);
+            if (columns.isEmpty()) {
+                // 部分驱动对 catalog/schema 匹配严格，放宽后仅按表名再查一次兜底
+                columns = readColumns(connection, null, null, tableName);
+            }
+            if (columns.isEmpty()) {
+                throw new JdbcConnectorException(
+                        JdbcConnectorErrorCode.NO_SUPPORT_OPERATION_FAILED,
+                        String.format(
+                                "无法读取目标表 [%s] 的列信息，请确认表已存在",
+                                buildTableLabel(databaseName, schemaName, tableName)));
+            }
+            return columns;
+        } catch (SQLException | ClassNotFoundException e) {
+            throw new JdbcConnectorException(
+                    JdbcConnectorErrorCode.CONNECT_DATABASE_FAILED,
+                    String.format(
+                            "读取目标表 [%s] 列信息失败",
+                            buildTableLabel(databaseName, schemaName, tableName)),
+                    e);
+        } finally {
+            connectionProvider.closeConnection();
+        }
+    }
+
+    private Map<String, String> readColumns(
+            Connection connection, String catalog, String schema, String table)
+            throws SQLException {
+        Map<String, String> columns = new HashMap<>();
+        DatabaseMetaData metaData = connection.getMetaData();
+        try (ResultSet resultSet = metaData.getColumns(catalog, schema, table, null)) {
+            while (resultSet.next()) {
+                String columnName = resultSet.getString("COLUMN_NAME");
+                if (StringUtils.isNotBlank(columnName)) {
+                    columns.put(columnName.toLowerCase(), columnName);
+                }
+            }
+        }
+        return columns;
+    }
+
+    private String buildTableLabel(String databaseName, String schemaName, String tableName) {
+        StringBuilder sb = new StringBuilder();
+        if (StringUtils.isNotBlank(databaseName)) {
+            sb.append(databaseName).append(".");
+        }
+        if (StringUtils.isNotBlank(schemaName)) {
+            sb.append(schemaName).append(".");
+        }
+        sb.append(tableName);
+        return sb.toString();
     }
 
     @Override
