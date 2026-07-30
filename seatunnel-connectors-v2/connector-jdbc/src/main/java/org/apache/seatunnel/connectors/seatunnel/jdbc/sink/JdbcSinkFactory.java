@@ -232,7 +232,13 @@ public class JdbcSinkFactory implements TableSinkFactory {
                         JdbcSinkOptions.TABLE_PREFIX,
                         JdbcSinkOptions.TABLE_SUFFIX,
                         SinkConnectorCommonOptions.MULTI_TABLE_SINK_REPLICA,
-                        JdbcSinkOptions.DIALECT)
+                        JdbcSinkOptions.DIALECT,
+                        JdbcSinkOptions.FIELD_MAPPER,
+                        JdbcSinkOptions.VALUE_MAPPER,
+                        JdbcSinkOptions.CODE_MAPPER,
+                        JdbcSinkOptions.RECORD_OPERATION,
+                        JdbcSinkOptions.DB_DATASOURCE_ID,
+                        JdbcSinkOptions.DB_SCHEMA)
                 .conditional(
                         JdbcSinkOptions.IS_EXACTLY_ONCE,
                         true,

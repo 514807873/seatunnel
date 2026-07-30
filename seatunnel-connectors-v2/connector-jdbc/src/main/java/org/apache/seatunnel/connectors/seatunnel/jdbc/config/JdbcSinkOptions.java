@@ -24,6 +24,7 @@ import org.apache.seatunnel.api.sink.SchemaSaveMode;
 import org.apache.seatunnel.connectors.seatunnel.jdbc.internal.dialect.dialectenum.FieldIdeEnum;
 
 import java.util.List;
+import java.util.Map;
 
 public class JdbcSinkOptions extends JdbcCommonOptions {
 
@@ -143,4 +144,42 @@ public class JdbcSinkOptions extends JdbcCommonOptions {
                     .booleanType()
                     .defaultValue(true)
                     .withDescription("Create index or not when auto create table");
+
+    public static final Option<Map<String, String>> FIELD_MAPPER =
+            Options.key("field_mapper")
+                    .mapType()
+                    .noDefaultValue()
+                    .withDescription("Field mapping from upstream field name to sink column name");
+
+    public static final Option<Map<String, String>> VALUE_MAPPER =
+            Options.key("value_mapper")
+                    .mapType()
+                    .noDefaultValue()
+                    .withDescription(
+                            "Field position mapping from upstream row index to sink column name");
+
+    public static final Option<Map<String, String>> CODE_MAPPER =
+            Options.key("code_mapper")
+                    .mapType()
+                    .noDefaultValue()
+                    .withDescription("Code table / encrypt mapping for sink columns");
+
+    public static final Option<Boolean> RECORD_OPERATION =
+            Options.key("recordOperation")
+                    .booleanType()
+                    .noDefaultValue()
+                    .withDescription(
+                            "Whether to fill operation type and timestamp into trailing columns");
+
+    public static final Option<String> DB_DATASOURCE_ID =
+            Options.key("db_datasource_id")
+                    .stringType()
+                    .noDefaultValue()
+                    .withDescription("Datasource id for pangu integration");
+
+    public static final Option<String> DB_SCHEMA =
+            Options.key("dbSchema")
+                    .stringType()
+                    .noDefaultValue()
+                    .withDescription("Target database schema");
 }

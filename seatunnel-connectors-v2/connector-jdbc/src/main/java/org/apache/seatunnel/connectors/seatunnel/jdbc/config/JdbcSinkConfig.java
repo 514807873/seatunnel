@@ -24,6 +24,7 @@ import lombok.Data;
 
 import java.io.Serializable;
 import java.util.List;
+import java.util.Map;
 
 @Data
 @Builder
@@ -41,6 +42,12 @@ public class JdbcSinkConfig implements Serializable {
     private boolean supportUpsertByInsertOnly;
     private boolean useCopyStatement;
     @Builder.Default private boolean createIndex = true;
+    private Map<String, String> fieldMapper;
+    private Map<String, String> valueMapper;
+    private Map<String, String> codeMapper;
+    private Boolean recordOperation;
+    private String dbDatasourceId;
+    private String dbSchema;
 
     public static JdbcSinkConfig of(ReadonlyConfig config) {
         JdbcSinkConfigBuilder builder = JdbcSinkConfig.builder();
@@ -56,6 +63,12 @@ public class JdbcSinkConfig implements Serializable {
         builder.simpleSql(config.get(JdbcSinkOptions.QUERY));
         builder.useCopyStatement(config.get(JdbcSinkOptions.USE_COPY_STATEMENT));
         builder.createIndex(config.get(JdbcSinkOptions.CREATE_INDEX));
+        config.getOptional(JdbcSinkOptions.FIELD_MAPPER).ifPresent(builder::fieldMapper);
+        config.getOptional(JdbcSinkOptions.VALUE_MAPPER).ifPresent(builder::valueMapper);
+        config.getOptional(JdbcSinkOptions.CODE_MAPPER).ifPresent(builder::codeMapper);
+        config.getOptional(JdbcSinkOptions.RECORD_OPERATION).ifPresent(builder::recordOperation);
+        config.getOptional(JdbcSinkOptions.DB_DATASOURCE_ID).ifPresent(builder::dbDatasourceId);
+        config.getOptional(JdbcSinkOptions.DB_SCHEMA).ifPresent(builder::dbSchema);
         return builder.build();
     }
 }

@@ -578,6 +578,10 @@ public class YamlSeaTunnelDomConfigProcessor extends AbstractDomConfigProcessor 
                     .key()
                     .equals(name)) {
                 httpConfig.setBasicAuthPassword(getTextContent(node));
+            } else if (ServerConfigOptions.MasterServerConfigOptions.PUBLIC_URL
+                    .key()
+                    .equals(name)) {
+                httpConfig.setPublicUrl(getTextContent(node));
             } else {
                 LOGGER.warning("Unrecognized element: " + name);
             }

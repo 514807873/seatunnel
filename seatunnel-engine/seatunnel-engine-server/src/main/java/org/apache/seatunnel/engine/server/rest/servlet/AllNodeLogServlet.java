@@ -32,6 +32,7 @@ import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 
 import java.io.IOException;
+import java.util.Optional;
 
 @Slf4j
 public class AllNodeLogServlet extends LogBaseServlet {
@@ -73,6 +74,19 @@ public class AllNodeLogServlet extends LogBaseServlet {
                     writeHtml(resp, logService.allNodeLogFormatHtml(jobId));
             }
         } else {
+            Optional<String[]> proxy = LogService.parseProxyPath(logName);
+            if (proxy.isPresent()) {
+                String node = proxy.get()[0];
+                String fileName = proxy.get()[1];
+                String content = logService.fetchNodeLogContent(node, fileName);
+                if (content == null) {
+                    resp.setStatus(HttpServletResponse.SC_BAD_GATEWAY);
+                    log.warn("Proxy log failed: node={}, file={}", node, fileName);
+                    return;
+                }
+                write(resp, content);
+                return;
+            }
             prepareLogResponse(resp, logPath, logName);
         }
     }

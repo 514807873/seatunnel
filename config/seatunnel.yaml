@@ -44,7 +44,13 @@ seatunnel:
       enable-http: true
       port: 8080
       enable-dynamic-port: false
+      # K8s NodePort / Ingress: rewrite WebUI log links through this public URL (leave empty for bare-metal)
+      # public-url: http://192.168.10.197:30890
       # Uncomment the following lines to enable basic authentication for web UI
       # enable-basic-auth: true
       # basic-auth-username: admin
       # basic-auth-password: admin
+    event-report-http:
+      url: "http://192.168.10.197:30863/st/zeta/callBack"
+      headers:
+        Content-Type: application/json

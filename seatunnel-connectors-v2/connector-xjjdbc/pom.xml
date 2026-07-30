@@ -33,24 +33,78 @@
             <artifactId>connector-common</artifactId>
             <version>${project.version}</version>
         </dependency>
-        <!-- Source: https://mvnrepository.com/artifact/com.clickhouse/clickhouse-jdbc -->
+        <!--
+            使用 classifier=all：自带 relocated Guava（com.clickhouse.client.internal.com.google.common），
+            避免与 SeaTunnel Child-First 下 connector fat jar 内嵌的裸 Guava 27 冲突
+            （NoSuchMethodError: ImmutableMap$Builder.buildKeepingLast）。
+            排除全部传递依赖，防止再打进裸 com.google.guava。
+        -->
         <dependency>
             <groupId>com.clickhouse</groupId>
             <artifactId>clickhouse-jdbc</artifactId>
             <version>0.9.6</version>
+            <classifier>all</classifier>
             <scope>compile</scope>
+            <exclusions>
+                <exclusion>
+                    <groupId>*</groupId>
+                    <artifactId>*</artifactId>
+                </exclusion>
+            </exclusions>
         </dependency>
         <!--
             ClickHouse 原生 TCP 驱动(com.github.housepower.jdbc.ClickHouseDriver),
             供配置 driver=com.github.housepower.jdbc.ClickHouseDriver + jdbc:clickhouse://host:9007 使用。
-            该驱动不依赖高版本 guava,可绕开官方 v2 驱动的 guava 冲突。
         -->
         <dependency>
             <groupId>com.github.housepower</groupId>
             <artifactId>clickhouse-native-jdbc</artifactId>
             <version>2.7.1</version>
             <scope>compile</scope>
+            <exclusions>
+                <exclusion>
+                    <groupId>com.google.guava</groupId>
+                    <artifactId>*</artifactId>
+                </exclusion>
+            </exclusions>
         </dependency>
     </dependencies>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-shade-plugin</artifactId>
+                <executions>
+                    <execution>
+                        <goals>
+                            <goal>shade</goal>
+                        </goals>
+                        <phase>package</phase>
+                        <configuration>
+                            <artifactSet>
+                                <excludes>
+                                    <exclude>com.google.guava:*</exclude>
+                                </excludes>
+                            </artifactSet>
+                            <filters>
+                                <filter>
+                                    <artifact>*:*</artifact>
+                                    <excludes>
+                                        <exclude>META-INF/*.SF</exclude>
+                                        <exclude>META-INF/*.DSA</exclude>
+                                        <exclude>META-INF/*.RSA</exclude>
+                                        <!-- 双保险：禁止任何裸 Guava 进入 fat jar -->
+                                        <exclude>com/google/common/**</exclude>
+                                        <exclude>com/google/thirdparty/**</exclude>
+                                    </excludes>
+                                </filter>
+                            </filters>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+        </plugins>
+    </build>
 
 </project>

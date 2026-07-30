@@ -71,12 +71,20 @@ public class BaseLogService extends BaseService {
      * @return the response body as a string, or {@code null} if the request failed
      */
     protected String sendGet(String urlString, String user, String pass) {
+        return sendGet(urlString, user, pass, 5000, 5000);
+    }
+
+    /**
+     * Send GET with custom timeouts (used for log proxy where files can be large).
+     */
+    protected String sendGet(
+            String urlString, String user, String pass, int connectTimeoutMs, int readTimeoutMs) {
         HttpURLConnection connection = null;
         try {
             connection = (HttpURLConnection) new URL(urlString).openConnection();
             connection.setRequestMethod("GET");
-            connection.setConnectTimeout(5000);
-            connection.setReadTimeout(5000);
+            connection.setConnectTimeout(connectTimeoutMs);
+            connection.setReadTimeout(readTimeoutMs);
 
             // Basic Auth
             if (user != null && pass != null) {

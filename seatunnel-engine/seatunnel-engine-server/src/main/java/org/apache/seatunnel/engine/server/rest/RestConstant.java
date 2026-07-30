@@ -92,6 +92,8 @@ public class RestConstant {
     public static final String REST_URL_PENDING_JOBS = "/pending-jobs";
     // Get All Nodes Log
     public static final String REST_URL_LOGS = "/logs";
+    /** Path segment for NodePort/Ingress log reverse-proxy: /logs/proxy/{host:port}/{file} */
+    public static final String REST_URL_LOGS_PROXY = "/logs/proxy";
     // Get Current Node Log
     public static final String REST_URL_LOG = "/log";
     // Code internal Use , Get Node Log Name

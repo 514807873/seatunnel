@@ -271,6 +271,17 @@ public class RestHttpGetCommandProcessor extends HttpCommandProcessor<HttpGetCom
                             httpGetCommand, getRestValue(logService.allNodeLogFormatHtml(jobId)));
             }
         } else {
+            java.util.Optional<String[]> proxy = LogService.parseProxyPath(logName);
+            if (proxy.isPresent()) {
+                String content =
+                        logService.fetchNodeLogContent(proxy.get()[0], proxy.get()[1]);
+                if (content == null) {
+                    httpGetCommand.send400();
+                    return;
+                }
+                this.prepareResponse(httpGetCommand, content);
+                return;
+            }
             prepareLogResponse(httpGetCommand, logPath, logName);
         }
     }

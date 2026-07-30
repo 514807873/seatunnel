@@ -246,26 +246,26 @@ public abstract class BaseService {
                 .add(RestConstant.JOB_NAME, jobState.getJobName())
                 .add(RestConstant.JOB_STATUS, jobState.getJobStatus().toString())
                 .add(RestConstant.ERROR_MSG, jobState.getErrorMessage())
-                .add(
-                        RestConstant.CREATE_TIME,
-                        DateTimeUtils.toString(
-                                jobState.getSubmitTime(),
-                                DateTimeUtils.Formatter.YYYY_MM_DD_HH_MM_SS))
-                .add(
-                        RestConstant.START_TIME,
-                        DateTimeUtils.toString(
-                                jobState.getStartTime(),
-                                DateTimeUtils.Formatter.YYYY_MM_DD_HH_MM_SS))
-                .add(
-                        RestConstant.FINISH_TIME,
-                        DateTimeUtils.toString(
-                                jobState.getFinishTime(),
-                                DateTimeUtils.Formatter.YYYY_MM_DD_HH_MM_SS))
+                .add(RestConstant.CREATE_TIME, formatTime(jobState.getSubmitTime()))
+                .add(RestConstant.START_TIME, formatTime(jobState.getStartTime()))
+                .add(RestConstant.FINISH_TIME, formatTime(jobState.getFinishTime()))
                 .add(RestConstant.JOB_DAG, jobDAGInfo.toJsonObject())
                 .add(RestConstant.PLUGIN_JARS_URLS, new JsonArray())
                 .add(
                         RestConstant.METRICS,
                         metricsToJsonObject(getJobMetrics(jobMetrics, jobDAGInfo)));
+    }
+
+    /**
+     * Null-safe formatting for job time fields. startTime (SCHEDULED timestamp) and finishTime may
+     * be null (e.g. a job that never reached SCHEDULED, or a job not yet in a terminal state), so
+     * we must not unbox a null Long into the primitive-long DateTimeUtils.toString overload, which
+     * would throw NullPointerException and make /finished-jobs and /job-info fail with HTTP 500.
+     */
+    private static String formatTime(Long timestamp) {
+        return timestamp == null
+                ? null
+                : DateTimeUtils.toString(timestamp, DateTimeUtils.Formatter.YYYY_MM_DD_HH_MM_SS);
     }
 
     private Map<String, Object> getJobMetrics(String jobMetrics, JobDAGInfo jobDAGInfo) {

@@ -50,6 +50,7 @@ import java.util.Optional;
 public class JdbcSinkWriter extends AbstractJdbcSinkWriter<ConnectionPoolManager> {
     private final Integer primaryKeyIndex;
     private SchemaCoordinator schemaCoordinator;
+    private final CodeConverter codeConverter;
 
     public JdbcSinkWriter(
             TablePath sinkTablePath,
@@ -60,10 +61,15 @@ public class JdbcSinkWriter extends AbstractJdbcSinkWriter<ConnectionPoolManager
             Integer primaryKeyIndex) {
         this.sinkTablePath = sinkTablePath;
         this.dialect = dialect;
-        this.tableSchema = tableSchema;
-        this.databaseTableSchema = databaseTableSchema;
         this.jdbcSinkConfig = jdbcSinkConfig;
+        this.databaseTableSchema = databaseTableSchema;
         this.primaryKeyIndex = primaryKeyIndex;
+        this.codeConverter = JdbcCodeMapperSupport.createCodeConverter(jdbcSinkConfig);
+        // Rebuild write schema with sink column names (XH/XM...) when field mapping is configured.
+        // Upstream catalog schema still uses source names (ID/NAME...), which breaks upsert PK lookup.
+        this.tableSchema =
+                JdbcFieldMappingUtils.rebuildSinkTableSchema(
+                        jdbcSinkConfig, tableSchema, databaseTableSchema);
         this.connectionProvider =
                 dialect.getJdbcConnectionProvider(jdbcSinkConfig.getJdbcConnectionConfig());
         this.outputFormat =
@@ -71,7 +77,7 @@ public class JdbcSinkWriter extends AbstractJdbcSinkWriter<ConnectionPoolManager
                                 dialect,
                                 connectionProvider,
                                 jdbcSinkConfig,
-                                tableSchema,
+                                this.tableSchema,
                                 databaseTableSchema)
                         .build();
     }
@@ -157,7 +163,14 @@ public class JdbcSinkWriter extends AbstractJdbcSinkWriter<ConnectionPoolManager
         }
 
         tryOpen();
-        outputFormat.writeRecord(element);
+        SeaTunnelRow rowToWrite = element;
+        if (JdbcFieldMappingUtils.hasFieldMapping(jdbcSinkConfig)
+                || Boolean.TRUE.equals(jdbcSinkConfig.getRecordOperation())) {
+            rowToWrite =
+                    JdbcFieldMappingUtils.remapRow(
+                            element, jdbcSinkConfig, tableSchema, codeConverter);
+        }
+        outputFormat.writeRecord(rowToWrite);
     }
 
     @Override

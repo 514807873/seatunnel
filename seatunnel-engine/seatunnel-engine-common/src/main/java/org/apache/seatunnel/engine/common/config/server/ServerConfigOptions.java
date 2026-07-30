@@ -286,6 +286,20 @@ public class ServerConfigOptions {
                         .defaultValue("admin")
                         .withDescription("The password for basic authentication.");
 
+        /**
+         * External base URL for WebUI log links (e.g. K8s NodePort
+         * http://192.168.10.197:30890). When set, /logs JSON/HTML returns
+         * proxy links under this URL instead of unreachable Pod IPs. Leave
+         * empty for bare-metal / direct deploy.
+         */
+        public static final Option<String> PUBLIC_URL =
+                Options.key("public-url")
+                        .stringType()
+                        .defaultValue("")
+                        .withDescription(
+                                "Public base URL of the REST/WebUI endpoint used to rewrite log links "
+                                        + "(e.g. http://host:30890 for K8s NodePort). Empty keeps direct node IP links.");
+
         public static final Option<HttpConfig> HTTP =
                 Options.key("http")
                         .type(new TypeReference<HttpConfig>() {})

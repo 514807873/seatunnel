@@ -78,6 +78,13 @@ public class HttpConfig implements Serializable {
     private String basicAuthPassword =
             ServerConfigOptions.MasterServerConfigOptions.BASIC_AUTH_PASSWORD.defaultValue();
 
+    /**
+     * Optional public base URL for rewriting WebUI log links (K8s NodePort / Ingress). Empty =
+     * keep direct node IP links (bare-metal compatible).
+     */
+    private String publicUrl =
+            ServerConfigOptions.MasterServerConfigOptions.PUBLIC_URL.defaultValue();
+
     public void setPort(int port) {
         checkPositive(port, ServerConfigOptions.MasterServerConfigOptions.HTTP + " must be > 0");
         this.port = port;

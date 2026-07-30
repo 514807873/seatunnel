@@ -140,18 +140,16 @@ public class JdbcSink
                             getDatabaseTableSchema().orElse(null),
                             new ArrayList<>());
         } else {
-            if (catalogTable.getTableSchema().getPrimaryKey() != null) {
-                String keyName = tableSchema.getPrimaryKey().getColumnNames().get(0);
-                int index = tableSchema.toPhysicalRowDataType().indexOf(keyName);
-                if (index > -1) {
-                    return new JdbcSinkWriter(
-                            sinkTablePath,
-                            dialect,
-                            jdbcSinkConfig,
-                            tableSchema,
-                            getDatabaseTableSchema().orElse(null),
-                            index);
-                }
+            Integer primaryKeyIndex =
+                    JdbcFieldMappingUtils.resolvePrimaryKeyIndex(jdbcSinkConfig, tableSchema);
+            if (primaryKeyIndex != null) {
+                return new JdbcSinkWriter(
+                        sinkTablePath,
+                        dialect,
+                        jdbcSinkConfig,
+                        tableSchema,
+                        getDatabaseTableSchema().orElse(null),
+                        primaryKeyIndex);
             }
             sinkWriter =
                     new JdbcSinkWriter(
