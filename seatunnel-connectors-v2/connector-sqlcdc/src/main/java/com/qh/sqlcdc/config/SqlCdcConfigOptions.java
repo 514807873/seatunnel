@@ -53,22 +53,14 @@ public class SqlCdcConfigOptions {
                     .listType().defaultValue(new ArrayList<String>()
             ).withDescription("primary keys");
 
-//    public static Option<List<String>> PRIMARY_KEYS =
-//            Options.key("primary_keys").listType().noDefaultValue().withDescription("primary keys");
+    /**
+     * 每轮 pollNext 最多向下游 collect 的差异行数，避免一次吐太多导致 checkpoint 超时。
+     */
+    public static final Option<Integer> EMIT_BATCH_SIZE =
+            Options.key("emit_batch_size")
+                    .intType()
+                    .defaultValue(1000)
+                    .withDescription("max rows to emit per pollNext");
 
-    //    public static Option<Boolean> directCompare =
-    //            Options.key("directCompare")
-    //                    .booleanType()
-    //                    .noDefaultValue()
-    //                    .withDescription("directCompare");
-    //    public static Option<Boolean> recordOperation =
-    //            Options.key("recordOperation")
-    //                    .booleanType()
-    //                    .noDefaultValue()
-    //                    .withDescription("是否记录操作类型与时间戳");
-    //    public static Option<JSONObject> directSinkConfig =
-    //            Options.key("directSinkConfig")
-    //                    .objectType(JSONObject.class)
-    //                    .noDefaultValue()
-    //                    .withDescription("directSinkConfig");
+    public static final String DIRECT_SINK_CONFIGS_KEY = "directSinkConfigs";
 }

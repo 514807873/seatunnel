@@ -159,15 +159,31 @@ public class Util {
     }
 
     public Connection getConnection(SqlCdcConfig jdbcConfig) {
-        try {
-            Driver dri = this.loadDriver(jdbcConfig.getDriver());
-            Properties info = new Properties();
-            info.setProperty("user", jdbcConfig.getUser());
-            info.setProperty("password", jdbcConfig.getPassWord());
+        return getConnection(
+                jdbcConfig.getDriver(),
+                jdbcConfig.getUrl(),
+                jdbcConfig.getUser(),
+                jdbcConfig.getPassWord());
+    }
 
-            Connection conn = dri.connect(jdbcConfig.getUrl(), info);
+    public Connection getConnection(DirectSinkConfig sinkConfig) {
+        return getConnection(
+                sinkConfig.getDriver(),
+                sinkConfig.getUrl(),
+                sinkConfig.getUser(),
+                sinkConfig.getPassword());
+    }
+
+    public Connection getConnection(String driver, String url, String user, String password) {
+        try {
+            Driver dri = this.loadDriver(driver);
+            Properties info = new Properties();
+            info.setProperty("user", user);
+            info.setProperty("password", password);
+
+            Connection conn = dri.connect(url, info);
             if (conn == null) {
-                throw new RuntimeException("No suitable driver found for " + jdbcConfig.getUrl());
+                throw new RuntimeException("No suitable driver found for " + url);
             }
             return conn;
         } catch (ClassNotFoundException | SQLException e) {
