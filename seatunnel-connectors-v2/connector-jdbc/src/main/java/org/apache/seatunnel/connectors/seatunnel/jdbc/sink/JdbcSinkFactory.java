@@ -72,10 +72,12 @@ import static org.apache.seatunnel.api.sink.SinkReplaceNameConstant.REPLACE_TABL
 import static org.apache.seatunnel.connectors.seatunnel.jdbc.config.JdbcOptions.ALL_Columns;
 import static org.apache.seatunnel.connectors.seatunnel.jdbc.config.JdbcOptions.AUTO_COMMIT;
 import static org.apache.seatunnel.connectors.seatunnel.jdbc.config.JdbcOptions.BATCH_SIZE;
+import static org.apache.seatunnel.connectors.seatunnel.jdbc.config.JdbcOptions.CA_CERT;
 import static org.apache.seatunnel.connectors.seatunnel.jdbc.config.JdbcOptions.COMPATIBLE_MODE;
 import static org.apache.seatunnel.connectors.seatunnel.jdbc.config.JdbcOptions.CONNECTION_CHECK_TIMEOUT_SEC;
 import static org.apache.seatunnel.connectors.seatunnel.jdbc.config.JdbcOptions.CUSTOM_SQL;
 import static org.apache.seatunnel.connectors.seatunnel.jdbc.config.JdbcOptions.DATABASE;
+import static org.apache.seatunnel.connectors.seatunnel.jdbc.config.JdbcOptions.DB_TYPE;
 import static org.apache.seatunnel.connectors.seatunnel.jdbc.config.JdbcOptions.DATA_SAVE_MODE;
 import static org.apache.seatunnel.connectors.seatunnel.jdbc.config.JdbcOptions.DRIVER;
 import static org.apache.seatunnel.connectors.seatunnel.jdbc.config.JdbcOptions.FIELD_MAPPER;
@@ -87,11 +89,13 @@ import static org.apache.seatunnel.connectors.seatunnel.jdbc.config.JdbcOptions.
 import static org.apache.seatunnel.connectors.seatunnel.jdbc.config.JdbcOptions.PRIMARY_KEYS;
 import static org.apache.seatunnel.connectors.seatunnel.jdbc.config.JdbcOptions.QUERY;
 import static org.apache.seatunnel.connectors.seatunnel.jdbc.config.JdbcOptions.SCHEMA_SAVE_MODE;
+import static org.apache.seatunnel.connectors.seatunnel.jdbc.config.JdbcOptions.SSLMODE;
 import static org.apache.seatunnel.connectors.seatunnel.jdbc.config.JdbcOptions.SUPPORT_UPSERT_BY_QUERY_PRIMARY_KEY_EXIST;
 import static org.apache.seatunnel.connectors.seatunnel.jdbc.config.JdbcOptions.TABLE;
 import static org.apache.seatunnel.connectors.seatunnel.jdbc.config.JdbcOptions.TRANSACTION_TIMEOUT_SEC;
 import static org.apache.seatunnel.connectors.seatunnel.jdbc.config.JdbcOptions.URL;
 import static org.apache.seatunnel.connectors.seatunnel.jdbc.config.JdbcOptions.USER;
+import static org.apache.seatunnel.connectors.seatunnel.jdbc.config.JdbcOptions.USE_SSL;
 import static org.apache.seatunnel.connectors.seatunnel.jdbc.config.JdbcOptions.XA_DATA_SOURCE_CLASS_NAME;
 import static org.apache.seatunnel.connectors.seatunnel.jdbc.config.JdbcOptions.recordOperation;
 
@@ -435,7 +439,11 @@ public class JdbcSinkFactory implements TableSinkFactory {
                         SUPPORT_UPSERT_BY_QUERY_PRIMARY_KEY_EXIST,
                         PRIMARY_KEYS,
                         COMPATIBLE_MODE,
-                        MULTI_TABLE_SINK_REPLICA)
+                        MULTI_TABLE_SINK_REPLICA,
+                        DB_TYPE,
+                        USE_SSL,
+                        CA_CERT,
+                        SSLMODE)
                 .conditional(
                         IS_EXACTLY_ONCE,
                         true,

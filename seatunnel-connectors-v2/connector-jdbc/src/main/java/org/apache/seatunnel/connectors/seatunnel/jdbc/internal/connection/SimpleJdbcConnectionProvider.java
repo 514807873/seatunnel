@@ -22,7 +22,9 @@ import org.apache.seatunnel.connectors.seatunnel.jdbc.config.JdbcConnectionConfi
 import org.apache.seatunnel.connectors.seatunnel.jdbc.exception.JdbcConnectorErrorCode;
 import org.apache.seatunnel.connectors.seatunnel.jdbc.exception.JdbcConnectorException;
 
+import org.apache.seatunnel.connectors.seatunnel.jdbc.utils.ClickHouseSslHelper;
 import org.apache.seatunnel.connectors.seatunnel.jdbc.utils.JdbcUtils;
+import org.apache.seatunnel.connectors.seatunnel.jdbc.utils.OracleSslHelper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -137,7 +139,22 @@ public class SimpleJdbcConnectionProvider implements JdbcConnectionProvider, Ser
             info.setProperty("password", jdbcConfig.getPassword().get());
         }
         info.putAll(jdbcConfig.getProperties());
-        connection = driver.connect(jdbcConfig.getUrl(), info);
+        String url =
+                OracleSslHelper.prepare(
+                        jdbcConfig.getDbType(),
+                        jdbcConfig.getUrl(),
+                        info,
+                        jdbcConfig.getUseSsl(),
+                        jdbcConfig.getCaCert());
+        url =
+                ClickHouseSslHelper.prepare(
+                        jdbcConfig.getDbType(),
+                        url,
+                        info,
+                        jdbcConfig.getUseSsl(),
+                        jdbcConfig.getCaCert(),
+                        jdbcConfig.getSslMode());
+        connection = driver.connect(url, info);
         if (connection == null) {
             // Throw same exception as DriverManager.getConnection when no driver found to match
             // caller expectation.

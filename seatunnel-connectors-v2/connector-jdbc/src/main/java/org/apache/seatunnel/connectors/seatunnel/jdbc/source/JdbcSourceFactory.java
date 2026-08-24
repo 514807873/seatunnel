@@ -33,8 +33,10 @@ import lombok.extern.slf4j.Slf4j;
 
 import java.io.Serializable;
 
+import static org.apache.seatunnel.connectors.seatunnel.jdbc.config.JdbcOptions.CA_CERT;
 import static org.apache.seatunnel.connectors.seatunnel.jdbc.config.JdbcOptions.COMPATIBLE_MODE;
 import static org.apache.seatunnel.connectors.seatunnel.jdbc.config.JdbcOptions.CONNECTION_CHECK_TIMEOUT_SEC;
+import static org.apache.seatunnel.connectors.seatunnel.jdbc.config.JdbcOptions.DB_TYPE;
 import static org.apache.seatunnel.connectors.seatunnel.jdbc.config.JdbcOptions.DRIVER;
 import static org.apache.seatunnel.connectors.seatunnel.jdbc.config.JdbcOptions.FETCH_SIZE;
 import static org.apache.seatunnel.connectors.seatunnel.jdbc.config.JdbcOptions.PARTITION_COLUMN;
@@ -44,8 +46,10 @@ import static org.apache.seatunnel.connectors.seatunnel.jdbc.config.JdbcOptions.
 import static org.apache.seatunnel.connectors.seatunnel.jdbc.config.JdbcOptions.PASSWORD;
 import static org.apache.seatunnel.connectors.seatunnel.jdbc.config.JdbcOptions.PROPERTIES;
 import static org.apache.seatunnel.connectors.seatunnel.jdbc.config.JdbcOptions.QUERY;
+import static org.apache.seatunnel.connectors.seatunnel.jdbc.config.JdbcOptions.SSLMODE;
 import static org.apache.seatunnel.connectors.seatunnel.jdbc.config.JdbcOptions.URL;
 import static org.apache.seatunnel.connectors.seatunnel.jdbc.config.JdbcOptions.USER;
+import static org.apache.seatunnel.connectors.seatunnel.jdbc.config.JdbcOptions.USE_SSL;
 import static org.apache.seatunnel.connectors.seatunnel.jdbc.config.JdbcSourceOptions.SPLIT_EVEN_DISTRIBUTION_FACTOR_LOWER_BOUND;
 import static org.apache.seatunnel.connectors.seatunnel.jdbc.config.JdbcSourceOptions.SPLIT_EVEN_DISTRIBUTION_FACTOR_UPPER_BOUND;
 import static org.apache.seatunnel.connectors.seatunnel.jdbc.config.JdbcSourceOptions.SPLIT_INVERSE_SAMPLING_RATE;
@@ -101,7 +105,11 @@ public class JdbcSourceFactory implements TableSourceFactory {
                         SPLIT_EVEN_DISTRIBUTION_FACTOR_UPPER_BOUND,
                         SPLIT_EVEN_DISTRIBUTION_FACTOR_LOWER_BOUND,
                         SPLIT_SAMPLE_SHARDING_THRESHOLD,
-                        SPLIT_INVERSE_SAMPLING_RATE)
+                        SPLIT_INVERSE_SAMPLING_RATE,
+                        DB_TYPE,
+                        USE_SSL,
+                        CA_CERT,
+                        SSLMODE)
                 .build();
     }
 

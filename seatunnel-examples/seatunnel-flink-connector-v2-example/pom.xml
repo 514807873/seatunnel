@@ -136,6 +136,18 @@
             <artifactId>clickhouse-jdbc</artifactId>
             <version>0.9.8</version>
             <scope>compile</scope>
+            <exclusions>
+                <exclusion>
+                    <groupId>org.antlr</groupId>
+                    <artifactId>antlr4-runtime</artifactId>
+                </exclusion>
+            </exclusions>
+        </dependency>
+
+        <dependency>
+            <groupId>org.antlr</groupId>
+            <artifactId>antlr4-runtime</artifactId>
+            <version>4.8</version>
         </dependency>
 
         <dependency>

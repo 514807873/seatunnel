@@ -57,6 +57,11 @@ public class JdbcConnectionConfig implements Serializable {
 
     private Map<String, String> properties;
 
+    public Boolean useSsl;
+    public String caCert;
+    public String sslMode;
+    public String dbType;
+
     public static JdbcConnectionConfig of(ReadonlyConfig config) {
         JdbcConnectionConfig.Builder builder = JdbcConnectionConfig.builder();
         builder.url(config.get(JdbcOptions.URL));
@@ -81,6 +86,10 @@ public class JdbcConnectionConfig implements Serializable {
         config.getOptional(JdbcOptions.USER).ifPresent(builder::username);
         config.getOptional(JdbcOptions.PASSWORD).ifPresent(builder::password);
         config.getOptional(JdbcOptions.PROPERTIES).ifPresent(builder::properties);
+        config.getOptional(JdbcOptions.USE_SSL).ifPresent(builder::useSsl);
+        config.getOptional(JdbcOptions.CA_CERT).ifPresent(builder::caCert);
+        config.getOptional(JdbcOptions.SSLMODE).ifPresent(builder::sslMode);
+        config.getOptional(JdbcOptions.DB_TYPE).ifPresent(builder::dbType);
         return builder.build();
     }
 
@@ -136,6 +145,22 @@ public class JdbcConnectionConfig implements Serializable {
         return properties;
     }
 
+    public Boolean getUseSsl() {
+        return useSsl;
+    }
+
+    public String getCaCert() {
+        return caCert;
+    }
+
+    public String getSslMode() {
+        return sslMode;
+    }
+
+    public String getDbType() {
+        return dbType;
+    }
+
     public static JdbcConnectionConfig.Builder builder() {
         return new JdbcConnectionConfig.Builder();
     }
@@ -160,6 +185,10 @@ public class JdbcConnectionConfig implements Serializable {
         public String kerberosPrincipal;
         public String kerberosKeytabPath;
         public String krb5Path = JdbcOptions.KRB5_PATH.defaultValue();
+        private Boolean useSsl;
+        private String caCert;
+        private String sslMode;
+        private String dbType;
 
         private Builder() {}
 
@@ -253,6 +282,26 @@ public class JdbcConnectionConfig implements Serializable {
             return this;
         }
 
+        public Builder useSsl(Boolean useSsl) {
+            this.useSsl = useSsl;
+            return this;
+        }
+
+        public Builder caCert(String caCert) {
+            this.caCert = caCert;
+            return this;
+        }
+
+        public Builder sslMode(String sslMode) {
+            this.sslMode = sslMode;
+            return this;
+        }
+
+        public Builder dbType(String dbType) {
+            this.dbType = dbType;
+            return this;
+        }
+
         public JdbcConnectionConfig build() {
             JdbcConnectionConfig jdbcConnectionConfig = new JdbcConnectionConfig();
             jdbcConnectionConfig.batchSize = this.batchSize;
@@ -273,6 +322,10 @@ public class JdbcConnectionConfig implements Serializable {
             jdbcConnectionConfig.krb5Path = this.krb5Path;
             jdbcConnectionConfig.properties =
                     this.properties == null ? new HashMap<>() : this.properties;
+            jdbcConnectionConfig.useSsl = this.useSsl;
+            jdbcConnectionConfig.caCert = this.caCert;
+            jdbcConnectionConfig.sslMode = this.sslMode;
+            jdbcConnectionConfig.dbType = this.dbType;
             return jdbcConnectionConfig;
         }
     }

@@ -774,9 +774,10 @@ public class ClickHouseDialect implements JdbcDialect {
                                         .collect(Collectors.toList()),
                                 ","),
                         table);
-        PreparedStatement ps = conn.prepareStatement(sql);
-        ps.executeQuery();
-        return ps.getMetaData();
+        try (PreparedStatement ps = conn.prepareStatement(sql);
+                ResultSet rs = ps.executeQuery()) {
+            return SnapshotResultSetMetaData.copy(rs.getMetaData());
+        }
     }
 
     public String modifyTimestamp(JdbcSinkConfig jdbcSinkConfig, Connection conn) {
@@ -792,5 +793,166 @@ public class ClickHouseDialect implements JdbcDialect {
             sql = String.format(sql, jdbcSinkConfig.getTable(), currentTimeString);
         }
         return sql;
+    }
+
+    private static final class SnapshotResultSetMetaData implements ResultSetMetaData {
+        private final String[] labels;
+        private final String[] names;
+        private final String[] typeNames;
+        private final int[] precisions;
+        private final int[] scales;
+
+        private SnapshotResultSetMetaData(
+                String[] labels,
+                String[] names,
+                String[] typeNames,
+                int[] precisions,
+                int[] scales) {
+            this.labels = labels;
+            this.names = names;
+            this.typeNames = typeNames;
+            this.precisions = precisions;
+            this.scales = scales;
+        }
+
+        static SnapshotResultSetMetaData copy(ResultSetMetaData src) throws SQLException {
+            int n = src.getColumnCount();
+            String[] labels = new String[n];
+            String[] names = new String[n];
+            String[] typeNames = new String[n];
+            int[] precisions = new int[n];
+            int[] scales = new int[n];
+            for (int i = 0; i < n; i++) {
+                int col = i + 1;
+                labels[i] = src.getColumnLabel(col);
+                names[i] = src.getColumnName(col);
+                typeNames[i] = src.getColumnTypeName(col);
+                precisions[i] = src.getPrecision(col);
+                scales[i] = src.getScale(col);
+            }
+            return new SnapshotResultSetMetaData(labels, names, typeNames, precisions, scales);
+        }
+
+        private int idx(int column) throws SQLException {
+            if (column < 1 || column > labels.length) {
+                throw new SQLException("invalid column index: " + column);
+            }
+            return column - 1;
+        }
+
+        @Override
+        public int getColumnCount() {
+            return labels.length;
+        }
+
+        @Override
+        public String getColumnLabel(int column) throws SQLException {
+            return labels[idx(column)];
+        }
+
+        @Override
+        public String getColumnName(int column) throws SQLException {
+            return names[idx(column)];
+        }
+
+        @Override
+        public String getColumnTypeName(int column) throws SQLException {
+            return typeNames[idx(column)];
+        }
+
+        @Override
+        public int getPrecision(int column) throws SQLException {
+            return precisions[idx(column)];
+        }
+
+        @Override
+        public int getScale(int column) throws SQLException {
+            return scales[idx(column)];
+        }
+
+        @Override
+        public boolean isAutoIncrement(int column) {
+            return false;
+        }
+
+        @Override
+        public boolean isCaseSensitive(int column) {
+            return true;
+        }
+
+        @Override
+        public boolean isSearchable(int column) {
+            return true;
+        }
+
+        @Override
+        public boolean isCurrency(int column) {
+            return false;
+        }
+
+        @Override
+        public int isNullable(int column) {
+            return columnNullableUnknown;
+        }
+
+        @Override
+        public boolean isSigned(int column) {
+            return true;
+        }
+
+        @Override
+        public int getColumnDisplaySize(int column) {
+            return 0;
+        }
+
+        @Override
+        public String getSchemaName(int column) {
+            return "";
+        }
+
+        @Override
+        public String getTableName(int column) {
+            return "";
+        }
+
+        @Override
+        public String getCatalogName(int column) {
+            return "";
+        }
+
+        @Override
+        public int getColumnType(int column) {
+            return java.sql.Types.OTHER;
+        }
+
+        @Override
+        public boolean isReadOnly(int column) {
+            return true;
+        }
+
+        @Override
+        public boolean isWritable(int column) {
+            return false;
+        }
+
+        @Override
+        public boolean isDefinitelyWritable(int column) {
+            return false;
+        }
+
+        @Override
+        public String getColumnClassName(int column) {
+            return String.class.getName();
+        }
+
+        @Override
+        public <T> T unwrap(Class<T> iface) throws SQLException {
+            throw new SQLException("not a wrapper");
+        }
+
+        @Override
+        public boolean isWrapperFor(Class<?> iface) {
+            return false;
+        }
     }
 }

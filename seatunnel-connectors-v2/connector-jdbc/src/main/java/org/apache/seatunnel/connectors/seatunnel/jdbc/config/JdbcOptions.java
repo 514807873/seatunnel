@@ -258,4 +258,25 @@ public interface JdbcOptions {
                     .withDescription("db_datasource_id");
     Option<String> dbSchema =
             Options.key("dbSchema").stringType().noDefaultValue().withDescription("数据库Schema");
+
+    Option<String> DB_TYPE =
+            Options.key("db_type").stringType().noDefaultValue().withDescription("数据库类型");
+
+    Option<Boolean> USE_SSL =
+            Options.key("use_ssl")
+                    .booleanType()
+                    .noDefaultValue()
+                    .withDescription("Oracle/ClickHouse SSL，未配置时按非 SSL 建连");
+
+    Option<String> CA_CERT =
+            Options.key("ca_cert")
+                    .stringType()
+                    .noDefaultValue()
+                    .withDescription("Oracle/ClickHouse CA 证书 PEM 文本");
+
+    Option<String> SSLMODE =
+            Options.key("sslmode")
+                    .stringType()
+                    .noDefaultValue()
+                    .withDescription("ClickHouse sslmode，strict/none，默认 strict");
 }

@@ -29,6 +29,7 @@ import com.qh.myconnect.converter.JdbcRowConverter;
 import com.qh.myconnect.dialect.JdbcDialect;
 import com.qh.myconnect.dialect.JdbcDialectTypeMapper;
 
+import java.math.BigDecimal;
 import java.sql.Connection;
 import java.sql.Date;
 import java.sql.PreparedStatement;
@@ -182,22 +183,37 @@ public class HexadbDialect implements JdbcDialect {
             throws SQLException {
         if (value == null || value.isEmpty()) {
             preparedStatement.setObject(position, null);
+            return;
+        }
+        String type = dbType == null ? "" : dbType.toLowerCase();
+        if (type.contains("int8") || "bigint".equals(type) || "bigserial".equals(type)) {
+            preparedStatement.setLong(position, Long.parseLong(value));
+        }
+        else if (type.contains("int") || "serial".equals(type) || "smallserial".equals(type)
+                || "smallint".equals(type)) {
+            preparedStatement.setInt(position, Integer.parseInt(value));
+        }
+        else if (type.contains("float8") || type.contains("double") || "float".equals(type)) {
+            preparedStatement.setDouble(position, Double.parseDouble(value));
+        }
+        else if (type.contains("float4") || "real".equals(type) || type.contains("float")) {
+            preparedStatement.setFloat(position, Float.parseFloat(value));
+        }
+        else if (type.contains("numeric") || type.contains("decimal")) {
+            preparedStatement.setBigDecimal(position, new BigDecimal(value));
+        }
+        else if (type.contains("bool")) {
+            preparedStatement.setBoolean(position, Boolean.parseBoolean(value) || "1".equals(value));
+        }
+        else if (type.contains("timestamp")) {
+            preparedStatement.setTimestamp(position, Timestamp.valueOf(value));
+        }
+        else if (type.contains("date")) {
+            preparedStatement.setDate(position, Date.valueOf(value));
         }
         else {
-            if (dbType.toLowerCase().contains("int")) {
-                preparedStatement.setInt(position, Integer.parseInt(value));
-            }
-            else if (dbType.toLowerCase().contains("timestamp")) {
-                preparedStatement.setTimestamp(position, Timestamp.valueOf(value));
-            }
-            else if(dbType.toLowerCase().contains("date")){
-                preparedStatement.setDate(position, Date.valueOf(value));
-            }
-            else {
-                preparedStatement.setString(position, value);
-            }
+            preparedStatement.setString(position, value);
         }
-
     }
 
     public String insertTmpTableSql(

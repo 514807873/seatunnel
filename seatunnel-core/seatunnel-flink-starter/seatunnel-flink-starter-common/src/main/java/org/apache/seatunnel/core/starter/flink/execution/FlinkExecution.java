@@ -18,7 +18,6 @@
 package org.apache.seatunnel.core.starter.flink.execution;
 
 import org.apache.flink.api.common.restartstrategy.RestartStrategies;
-import org.apache.flink.api.common.time.Time;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
 import org.apache.seatunnel.shade.com.typesafe.config.Config;
 import org.apache.seatunnel.shade.com.typesafe.config.ConfigUtil;
@@ -51,11 +50,10 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
-import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
-import java.util.stream.Stream;
 
 /**
  * Used to execute a SeaTunnelTask.
@@ -204,6 +202,14 @@ public class FlinkExecution implements TaskExecution {
         }
     }
 
+    /**
+     * Load env.jars / plugins lib / seatunnel lib onto the JM classloader for SPI discovery
+     * (e.g. TableTransformFactory in seatunnel-transforms-v2).
+     * pipeline.jars only keeps env.jars, plugins lib, discovered connectors, and filtered
+     * runtime lib jars (transform / JDBC drivers).
+     * Note: do not use local:// here — Flink 1.15 ConfigUtils.decodeListFromConfig uses
+     * java.net.URL and rejects unknown protocol "local".
+     */
     private void registerPlugin(Config envConfig) {
         List<Path> thirdPartyJars = new ArrayList<>();
         if (envConfig.hasPath(EnvCommonOptions.JARS.key())) {
@@ -213,24 +219,71 @@ public class FlinkExecution implements TaskExecution {
                                     envConfig.getString(EnvCommonOptions.JARS.key())));
         }
         thirdPartyJars.addAll(Common.getPluginsJarDependencies());
-        List<URL> jarDependencies =
-                Stream.concat(thirdPartyJars.stream(), Common.getLibJars().stream())
-                        .map(Path::toUri)
-                        .map(
-                                uri -> {
-                                    try {
-                                        return uri.toURL();
-                                    } catch (MalformedURLException e) {
-                                        throw new RuntimeException(
-                                                "the uri of jar illegal:" + uri, e);
-                                    }
-                                })
-                        .collect(Collectors.toList());
+        List<URL> jarDependencies = pathsToUrls(thirdPartyJars);
         jarDependencies.forEach(
                 url ->
                         FlinkAbstractPluginExecuteProcessor.ADD_URL_TO_CLASSLOADER.accept(
                                 Thread.currentThread().getContextClassLoader(), url));
         jarPaths.addAll(jarDependencies);
+
+        // Transform SPI and JDBC drivers live under lib; JM must see them on the classloader.
+        List<URL> libJars = pathsToUrls(Common.getLibJars());
+        libJars.forEach(
+                url ->
+                        FlinkAbstractPluginExecuteProcessor.ADD_URL_TO_CLASSLOADER.accept(
+                                Thread.currentThread().getContextClassLoader(), url));
+        // Ship only runtime-needed lib jars to TM; skip unused vendor SDKs.
+        jarPaths.addAll(filterRuntimeLibJars(libJars));
+    }
+
+    private List<URL> pathsToUrls(List<Path> paths) {
+        return paths.stream()
+                .map(Path::toUri)
+                .map(
+                        uri -> {
+                            try {
+                                return uri.toURL();
+                            } catch (MalformedURLException e) {
+                                throw new RuntimeException("the uri of jar illegal:" + uri, e);
+                            }
+                        })
+                .collect(Collectors.toList());
+    }
+
+    /**
+     * Keep transform / JDBC driver jars for TM; drop unused vendor drivers from pipeline.jars.
+     */
+    private List<URL> filterRuntimeLibJars(List<URL> libJars) {
+        List<URL> runtimeJars = new ArrayList<>();
+        for (URL jarUrl : libJars) {
+            String name = new File(jarUrl.getFile()).getName().toLowerCase();
+            if (isRuntimeLibJar(name)) {
+                runtimeJars.add(jarUrl);
+            }
+        }
+        return runtimeJars;
+    }
+
+    private boolean isRuntimeLibJar(String jarName) {
+        return jarName.contains("transform")
+                || jarName.contains("jdbc")
+                || jarName.contains("mysql-connector")
+                || jarName.contains("postgresql")
+                || jarName.contains("clickhouse")
+                || jarName.contains("ojdbc")
+                || jarName.contains("orai18n")
+                || jarName.contains("dmjdbc")
+                || jarName.contains("mssql")
+                || jarName.contains("db2jcc")
+                || jarName.contains("hexadb")
+                || jarName.contains("trino")
+                || jarName.contains("redshift")
+                || jarName.contains("sqlite")
+                || jarName.contains("tablestore")
+                || jarName.contains("terajdbc")
+                || jarName.startsWith("xdb")
+                || jarName.contains("quality-checker")
+                || jarName.contains("netty-");
     }
 
     private Config registerPlugin(Config config, List<URL> jars) {
@@ -244,50 +297,27 @@ public class FlinkExecution implements TaskExecution {
     private Config injectJarsToConfig(Config config, String path, List<URL> jars) {
         List<URL> validJars = new ArrayList<>();
         for (URL jarUrl : jars) {
-            if (new File(jarUrl.getFile()).exists()) {
+            if (jarUrl != null && new File(jarUrl.getFile()).exists()) {
                 validJars.add(jarUrl);
                 LOGGER.info("Inject jar to config: {}", jarUrl);
-            }
-            else {
+            } else {
                 LOGGER.warn("Remove invalid jar when inject jars into config: {}", jarUrl);
             }
         }
 
+        Set<String> pipelineJars = new LinkedHashSet<>();
         if (config.hasPath(path)) {
-            Set<URL> paths =
-                    Arrays.stream(config.getString(path).split(";"))
-                            .map(
-                                    uri -> {
-                                        try {
-                                            return new URL(uri);
-                                        } catch (MalformedURLException e) {
-                                            throw new RuntimeException(
-                                                    "the uri of jar illegal:" + uri, e);
-                                        }
-                                    })
-                            .collect(Collectors.toSet());
-            paths.addAll(validJars);
-
-            config =
-                    config.withValue(
-                            path,
-                            ConfigValueFactory.fromAnyRef(
-                                    paths.stream()
-                                            .map(URL::toString)
-                                            .distinct()
-                                            .collect(Collectors.joining(";"))));
-
+            Arrays.stream(config.getString(path).split(";"))
+                    .filter(uri -> uri != null && !uri.isEmpty())
+                    // Skip local:// leftovers; Flink 1.15 cannot decode them via java.net.URL.
+                    .filter(uri -> !uri.regionMatches(true, 0, "local:", 0, 6))
+                    .forEach(pipelineJars::add);
         }
-        else {
-            config =
-                    config.withValue(
-                            path,
-                            ConfigValueFactory.fromAnyRef(
-                                    validJars.stream()
-                                            .map(URL::toString)
-                                            .distinct()
-                                            .collect(Collectors.joining(";"))));
+        for (URL jarUrl : validJars) {
+            pipelineJars.add(jarUrl.toString());
         }
-        return config;
+
+        return config.withValue(
+                path, ConfigValueFactory.fromAnyRef(String.join(";", pipelineJars)));
     }
 }

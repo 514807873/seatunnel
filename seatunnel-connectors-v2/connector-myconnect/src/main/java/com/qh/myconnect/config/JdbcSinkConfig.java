@@ -52,6 +52,9 @@ public class JdbcSinkConfig implements Serializable {
     private boolean openQuality;
     private List<QualityFieldRule> qualityFieldRule;
     private int batchSize;
+    private Boolean useSsl;
+    private String caCert;
+    private String sslMode;
 
     public static JdbcSinkConfig of(ReadonlyConfig config) {
         JdbcSinkConfig.Builder builder = JdbcSinkConfig.builder();
@@ -77,6 +80,9 @@ public class JdbcSinkConfig implements Serializable {
         config.getOptional(JdbcOptions.DB_DATASOURCE_ID).ifPresent(builder::dbDatasourceId);
         config.getOptional(JdbcOptions.openQuality).ifPresent(builder::openQuality);
         config.getOptional(JdbcOptions.qualityFieldRule).ifPresent(builder::qualityFieldRule);
+        config.getOptional(JdbcOptions.USE_SSL).ifPresent(builder::useSsl);
+        config.getOptional(JdbcOptions.CA_CERT).ifPresent(builder::caCert);
+        config.getOptional(JdbcOptions.SSLMODE).ifPresent(builder::sslMode);
         return builder.build();
     }
 }

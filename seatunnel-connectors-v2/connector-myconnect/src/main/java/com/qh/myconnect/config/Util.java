@@ -12,6 +12,8 @@ import com.qh.myconnect.dialect.JdbcConnectorErrorCode;
 import com.qh.myconnect.dialect.JdbcConnectorException;
 import com.qh.myconnect.dialect.JdbcDialect;
 import com.qh.myconnect.dialect.JdbcDialectTypeMapper;
+import com.qh.myconnect.utils.ClickHouseSslHelper;
+import com.qh.myconnect.utils.OracleSslHelper;
 import lombok.extern.slf4j.Slf4j;
 
 import java.io.BufferedReader;
@@ -312,7 +314,22 @@ public class Util {
             if (jdbcSinkConfig.getPassWord() != null) {
                 info.setProperty("password", jdbcSinkConfig.getPassWord());
             }
-            Connection conn = driver.connect(jdbcSinkConfig.getUrl(), info);
+            String url =
+                    OracleSslHelper.prepare(
+                            jdbcSinkConfig.getDbType(),
+                            jdbcSinkConfig.getUrl(),
+                            info,
+                            jdbcSinkConfig.getUseSsl(),
+                            jdbcSinkConfig.getCaCert());
+            url =
+                    ClickHouseSslHelper.prepare(
+                            jdbcSinkConfig.getDbType(),
+                            url,
+                            info,
+                            jdbcSinkConfig.getUseSsl(),
+                            jdbcSinkConfig.getCaCert(),
+                            jdbcSinkConfig.getSslMode());
+            Connection conn = driver.connect(url, info);
             if (conn == null) {
                 throw new JdbcConnectorException(
                         JdbcConnectorErrorCode.NO_SUITABLE_DRIVER,

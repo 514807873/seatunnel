@@ -61,7 +61,10 @@ public class MySinkFactory implements TableSinkFactory {
                         JdbcOptions.CODE_MAPPER,
                         JdbcOptions.DECODE_MAPPER,
                         JdbcOptions.PRE_CONFIG,
-                        JdbcOptions.PRIMARY_KEYS)
+                        JdbcOptions.PRIMARY_KEYS,
+                        JdbcOptions.USE_SSL,
+                        JdbcOptions.CA_CERT,
+                        JdbcOptions.SSLMODE)
                 .conditional(
                         JdbcOptions.IS_EXACTLY_ONCE,
                         true,
