@@ -66,4 +66,11 @@ public class OracleIncrementalSourceOptions extends JdbcSourceOptions {
                     .booleanType()
                     .defaultValue(false)
                     .withDescription("Skip the analysis of table count in full stage");
+
+    public static final Option<Boolean> LOB_ENABLED =
+            Options.key("lob.enabled")
+                    .booleanType()
+                    .defaultValue(true)
+                    .withDescription(
+                            "Enable Oracle LogMiner LOB capture. Can be overridden by debezium.lob.enabled.");
 }

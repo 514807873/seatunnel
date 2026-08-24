@@ -34,7 +34,8 @@ public class SqlServerIncrementalSourceOptions extends JdbcSourceOptions {
                                     Arrays.asList(
                                             StartupMode.INITIAL,
                                             StartupMode.EARLIEST,
-                                            StartupMode.LATEST))
+                                            StartupMode.LATEST,
+                                            StartupMode.SPECIFIC))
                             .defaultValue(StartupMode.INITIAL)
                             .withDescription(
                                     "Optional startup mode for CDC source, valid enumerations are "

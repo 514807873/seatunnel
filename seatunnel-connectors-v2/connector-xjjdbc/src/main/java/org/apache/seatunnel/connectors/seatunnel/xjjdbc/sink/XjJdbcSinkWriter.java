@@ -20,6 +20,7 @@ package org.apache.seatunnel.connectors.seatunnel.xjjdbc.sink;
 import org.apache.seatunnel.shade.org.apache.commons.lang3.StringUtils;
 
 import org.apache.seatunnel.api.sink.SinkWriter;
+import org.apache.seatunnel.api.table.type.RowKind;
 import org.apache.seatunnel.api.table.type.SeaTunnelRow;
 import org.apache.seatunnel.api.table.type.SeaTunnelRowType;
 import org.apache.seatunnel.common.utils.JsonUtils;
@@ -133,7 +134,7 @@ public class XjJdbcSinkWriter extends AbstractSinkWriter<SeaTunnelRow, Void> {
 
     @Override
     public void write(SeaTunnelRow element) throws IOException {
-        if (element == null) {
+        if (element == null || RowKind.UPDATE_BEFORE.equals(element.getRowKind())) {
             return;
         }
         midCount.setWriteCount(midCount.getWriteCount() + 1);

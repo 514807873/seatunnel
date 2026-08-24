@@ -67,8 +67,11 @@ public class LsnOffsetFactory extends OffsetFactory {
 
     @Override
     public Offset specific(String filename, Long position) {
-        throw new UnsupportedOperationException(
-                "not supported create new Offset by filename and position.");
+        if (filename == null || filename.trim().isEmpty()) {
+            throw new IllegalArgumentException(
+                    "SqlServer-CDC SPECIFIC startup requires startup.specific-offset.file as commit LSN");
+        }
+        return LsnOffset.valueOf(filename.trim());
     }
 
     @Override

@@ -48,6 +48,8 @@ public class OracleSourceConfigFactory extends JdbcSourceConfigFactory {
     private Boolean useSelectCount;
 
     private Boolean skipAnalyze;
+
+    private Boolean lobEnabled = Boolean.TRUE;
     /**
      * An optional list of regular expressions that match schema names to be monitored; any schema
      * name not included in the whitelist will be excluded from monitoring. By default all
@@ -65,6 +67,11 @@ public class OracleSourceConfigFactory extends JdbcSourceConfigFactory {
 
     public JdbcSourceConfigFactory skipAnalyze(Boolean skipAnalyze) {
         this.skipAnalyze = skipAnalyze;
+        return this;
+    }
+
+    public JdbcSourceConfigFactory lobEnabled(Boolean lobEnabled) {
+        this.lobEnabled = lobEnabled;
         return this;
     }
 
@@ -108,6 +115,8 @@ public class OracleSourceConfigFactory extends JdbcSourceConfigFactory {
         // disable tombstones
         props.setProperty("tombstones.on.delete", String.valueOf(false));
         props.setProperty(LOG_MINING_READONLY_KEY, "true");
+        props.setProperty(
+                "lob.enabled", String.valueOf(lobEnabled == null || Boolean.TRUE.equals(lobEnabled)));
 
         if (originUrl != null) {
             props.setProperty("database.url", originUrl);

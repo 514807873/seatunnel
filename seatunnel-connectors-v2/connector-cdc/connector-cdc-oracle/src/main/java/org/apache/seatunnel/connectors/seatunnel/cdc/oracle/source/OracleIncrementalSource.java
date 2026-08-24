@@ -89,6 +89,7 @@ public class OracleIncrementalSource<T> extends IncrementalSource<T, JdbcSourceC
         configFactory.schemaList(config.get(OracleIncrementalSourceOptions.SCHEMA_NAMES));
         configFactory.useSelectCount(config.get(OracleIncrementalSourceOptions.USE_SELECT_COUNT));
         configFactory.skipAnalyze(config.get(OracleIncrementalSourceOptions.SKIP_ANALYZE));
+        configFactory.lobEnabled(config.get(OracleIncrementalSourceOptions.LOB_ENABLED));
         configFactory.originUrl(config.get(JdbcCommonOptions.URL));
         return configFactory;
     }

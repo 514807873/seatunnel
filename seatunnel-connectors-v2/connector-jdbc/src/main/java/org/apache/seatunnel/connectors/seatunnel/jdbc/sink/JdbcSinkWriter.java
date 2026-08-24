@@ -25,6 +25,7 @@ import org.apache.seatunnel.api.table.catalog.TableSchema;
 import org.apache.seatunnel.api.table.coordinator.SchemaCoordinator;
 import org.apache.seatunnel.api.table.schema.event.FlushEvent;
 import org.apache.seatunnel.api.table.schema.exception.SinkWriterSchemaException;
+import org.apache.seatunnel.api.table.type.RowKind;
 import org.apache.seatunnel.api.table.type.SeaTunnelRow;
 import org.apache.seatunnel.common.exception.CommonErrorCodeDeprecated;
 import org.apache.seatunnel.connectors.seatunnel.jdbc.config.JdbcSinkConfig;
@@ -155,6 +156,9 @@ public class JdbcSinkWriter extends AbstractJdbcSinkWriter<ConnectionPoolManager
 
     @Override
     public void write(SeaTunnelRow element) throws IOException {
+        if (element != null && RowKind.UPDATE_BEFORE.equals(element.getRowKind())) {
+            return;
+        }
         if (element != null && element.getOptions() != null) {
             if (element.getOptions().containsKey("flush_event")
                     || element.getOptions().containsKey("schema_change_event")) {
