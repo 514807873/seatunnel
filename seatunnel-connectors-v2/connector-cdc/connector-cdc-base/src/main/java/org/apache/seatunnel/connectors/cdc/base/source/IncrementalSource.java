@@ -19,6 +19,7 @@ package org.apache.seatunnel.connectors.cdc.base.source;
 
 import org.apache.seatunnel.shade.com.google.common.collect.Sets;
 
+import org.apache.seatunnel.api.common.JobContext;
 import org.apache.seatunnel.api.configuration.Option;
 import org.apache.seatunnel.api.configuration.ReadonlyConfig;
 import org.apache.seatunnel.api.source.Boundedness;
@@ -32,6 +33,7 @@ import org.apache.seatunnel.api.table.catalog.MetadataColumn;
 import org.apache.seatunnel.api.table.catalog.MetadataSchema;
 import org.apache.seatunnel.api.table.type.BasicType;
 import org.apache.seatunnel.api.table.type.CommonOptions;
+import org.apache.seatunnel.common.pangu.PanguJobIds;
 import org.apache.seatunnel.connectors.cdc.base.config.SourceConfig;
 import org.apache.seatunnel.connectors.cdc.base.config.StartupConfig;
 import org.apache.seatunnel.connectors.cdc.base.config.StopConfig;
@@ -114,6 +116,7 @@ public abstract class IncrementalSource<T, C extends SourceConfig>
 
     protected StopMode stopMode;
     protected DebeziumDeserializationSchema<T> deserializationSchema;
+    protected JobContext jobContext;
 
     protected IncrementalSource(ReadonlyConfig options, List<CatalogTable> catalogTables) {
         this.readonlyConfig = options;
@@ -239,15 +242,27 @@ public abstract class IncrementalSource<T, C extends SourceConfig>
                                 dataSourceDialect,
                                 sourceConfig,
                                 schemaChangeResolver);
+        RecordEmitter<SourceRecords, T, SourceSplitStateBase> recordEmitter =
+                createRecordEmitter(sourceConfig, readerContext);
+        if (recordEmitter instanceof IncrementalSourceRecordEmitter) {
+            String panguJobId =
+                    PanguJobIds.resolve(jobContext == null ? null : jobContext.getPanguJobId());
+            ((IncrementalSourceRecordEmitter<?>) recordEmitter).setPanguJobId(panguJobId);
+        }
         return new IncrementalSourceReader<>(
                 dataSourceDialect,
                 elementsQueue,
                 splitReaderSupplier,
-                createRecordEmitter(sourceConfig, readerContext),
+                recordEmitter,
                 new SourceReaderOptions(readonlyConfig),
                 readerContext,
                 sourceConfig,
                 deserializationSchema);
+    }
+
+    @Override
+    public void setJobContext(JobContext jobContext) {
+        this.jobContext = jobContext;
     }
 
     protected RecordEmitter<SourceRecords, T, SourceSplitStateBase> createRecordEmitter(

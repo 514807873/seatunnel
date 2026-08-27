@@ -208,6 +208,7 @@
                 <include>org.apache.seatunnel:seatunnel-clickhouse-log-appender:jar</include>
                 <include>com.clickhouse:clickhouse-jdbc:jar</include>
                 <include>com.github.housepower:clickhouse-native-jdbc:jar</include>
+                <include>io.airlift:aircompressor:jar</include>
                 <include>com.google.guava:guava:jar</include>
             </includes>
             <outputFileNameMapping>${artifact.file.name}</outputFileNameMapping>

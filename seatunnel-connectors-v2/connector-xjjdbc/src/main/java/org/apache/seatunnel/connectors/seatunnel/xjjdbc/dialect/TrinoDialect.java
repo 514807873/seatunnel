@@ -44,8 +44,7 @@ public class TrinoDialect implements XjJdbcDialect {
     @Override
     public void initConnection(Connection connection) throws SQLException {
         try (Statement statement = connection.createStatement()) {
-            statement.execute(
-                    "SET SESSION hive.insert_existing_partitions_behavior = 'APPEND'");
+            statement.execute("SET SESSION hive.insert_existing_partitions_behavior = 'APPEND'");
         }
     }
 

@@ -40,6 +40,13 @@ public class EnvCommonOptions {
                     .defaultValue("SeaTunnel_Job")
                     .withDescription("The job name of this job");
 
+    public static Option<String> PANGU_JOB_ID =
+            Options.key("pangu-job-id")
+                    .stringType()
+                    .noDefaultValue()
+                    .withDescription(
+                            "Pangu interface jobId used by checkpoint flush of offset and stream_record");
+
     public static Option<JobMode> JOB_MODE =
             Options.key("job.mode")
                     .enumType(JobMode.class)

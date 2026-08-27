@@ -18,14 +18,14 @@
 package org.apache.seatunnel.connectors.seatunnel.kafka.source;
 
 import org.apache.seatunnel.shade.com.google.common.collect.Sets;
-import org.apache.seatunnel.shade.com.google.common.util.concurrent.RateLimiter;
 
-import org.apache.seatunnel.api.event.DefaultEventProcessor;
 import org.apache.seatunnel.api.serialization.DeserializationSchema;
 import org.apache.seatunnel.api.source.Boundedness;
 import org.apache.seatunnel.api.source.Collector;
 import org.apache.seatunnel.api.source.SourceReader;
 import org.apache.seatunnel.api.table.type.SeaTunnelRow;
+import org.apache.seatunnel.common.pangu.PanguJobIds;
+import org.apache.seatunnel.common.pangu.PanguStore;
 import org.apache.seatunnel.connectors.seatunnel.kafka.config.MessageFormatErrorHandleWay;
 import org.apache.seatunnel.connectors.seatunnel.kafka.exception.KafkaConnectorErrorCode;
 import org.apache.seatunnel.connectors.seatunnel.kafka.exception.KafkaConnectorException;
@@ -36,17 +36,14 @@ import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.TopicPartition;
 
-import com.alibaba.fastjson.JSONObject;
 import lombok.extern.slf4j.Slf4j;
 
 import java.io.IOException;
-import java.lang.reflect.Field;
 import java.time.Duration;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
@@ -54,8 +51,6 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.stream.Collectors;
-
-import static org.apache.seatunnel.connectors.seatunnel.kafka.utils.HttpUtils.sendPostRequest;
 
 @Slf4j
 public class KafkaSourceReader implements SourceReader<SeaTunnelRow, KafkaSourceSplit> {
@@ -73,12 +68,9 @@ public class KafkaSourceReader implements SourceReader<SeaTunnelRow, KafkaSource
     private final MessageFormatErrorHandleWay messageFormatErrorHandleWay;
 
     private final LinkedBlockingQueue<KafkaSourceSplit> pendingPartitionsQueue;
-    private final String st_offset_url =
-            System.getenv("ST_SERVICE_URL") + "/SeaTunnelJob/recordOffset";
-    private final RateLimiter rateLimiter = RateLimiter.create(2.0);
-    private Optional<String> flinkJobId = Optional.empty();
+    private String panguJobId;
     private volatile boolean running = false;
-    private Map<String, Long> offsetMap = new HashMap<>();
+    private final Map<String, Long> offsetMap = new HashMap<>();
 
     KafkaSourceReader(
             ConsumerMetadata metadata,
@@ -95,18 +87,13 @@ public class KafkaSourceReader implements SourceReader<SeaTunnelRow, KafkaSource
         this.executorService =
                 Executors.newCachedThreadPool(r -> new Thread(r, "Kafka Source Data Consumer"));
         pendingPartitionsQueue = new LinkedBlockingQueue<>();
-        if (context.getEventListener() instanceof DefaultEventProcessor) {
-            DefaultEventProcessor defaultEventProcessor =
-                    (DefaultEventProcessor) context.getEventListener();
-            Class<? extends DefaultEventProcessor> aClass = defaultEventProcessor.getClass();
-            try {
-                Field field = aClass.getDeclaredField("jobId");
-                field.setAccessible(true);
-                Object jobid = field.get(defaultEventProcessor);
-                this.flinkJobId = Optional.of(String.valueOf(jobid));
-            } catch (NoSuchFieldException | IllegalAccessException e) {
-                throw new RuntimeException(e);
-            }
+        this.panguJobId = PanguJobIds.resolve(null);
+    }
+
+    public void setPanguJobId(String panguJobId) {
+        String resolved = PanguJobIds.resolve(panguJobId);
+        if (resolved != null) {
+            this.panguJobId = resolved;
         }
     }
 
@@ -118,21 +105,7 @@ public class KafkaSourceReader implements SourceReader<SeaTunnelRow, KafkaSource
         if (executorService != null) {
             executorService.shutdownNow();
         }
-        offsetMap.forEach(
-                (k, v) -> {
-                    if (v != 0) {
-                        JSONObject jsonObject = new JSONObject();
-                        jsonObject.put("flinkJobId", flinkJobId.get());
-                        jsonObject.put("fileName", k);
-                        jsonObject.put("position", v);
-                        try {
-                            sendPostRequest(st_offset_url, jsonObject.toJSONString());
-                        } catch (Exception e) {
-                            throw new RuntimeException(e);
-                        }
-                    }
-                });
-        System.out.println("抽取完成" + offsetMap);
+        flushPanguOffset();
     }
 
     @Override
@@ -199,40 +172,6 @@ public class KafkaSourceReader implements SourceReader<SeaTunnelRow, KafkaSource
                                                                         record.partition() + "",
                                                                         record.offset());
                                                             }
-                                                            // 限流2秒发送一次offset记录请求
-                                                            new Thread(
-                                                                            () -> {
-                                                                                if (rateLimiter
-                                                                                        .tryAcquire()) {
-                                                                                    JSONObject
-                                                                                            param =
-                                                                                                    new JSONObject();
-                                                                                    param.put(
-                                                                                            "flinkJobId",
-                                                                                            flinkJobId
-                                                                                                    .get());
-                                                                                    param.put(
-                                                                                            "fileName",
-                                                                                            record
-                                                                                                    .partition());
-                                                                                    param.put(
-                                                                                            "position",
-                                                                                            record
-                                                                                                    .offset());
-                                                                                    try {
-                                                                                        sendPostRequest(
-                                                                                                st_offset_url,
-                                                                                                param
-                                                                                                        .toString());
-                                                                                    } catch (
-                                                                                            Exception
-                                                                                                    e) {
-                                                                                        throw new RuntimeException(
-                                                                                                e);
-                                                                                    }
-                                                                                }
-                                                                            })
-                                                                    .start();
                                                         } catch (IOException e) {
                                                             if (this.messageFormatErrorHandleWay
                                                                     == MessageFormatErrorHandleWay
@@ -315,8 +254,19 @@ public class KafkaSourceReader implements SourceReader<SeaTunnelRow, KafkaSource
         log.info("receive no more splits message, this reader will not add new split.");
     }
 
+    private void flushPanguOffset() {
+        offsetMap.forEach(
+                (partition, offset) -> {
+                    if (offset != null && offset != 0) {
+                        PanguStore.getInstance()
+                                .upsertOffset(panguJobId, partition, String.valueOf(offset));
+                    }
+                });
+    }
+
     @Override
     public void notifyCheckpointComplete(long checkpointId) {
+        flushPanguOffset();
         if (!checkpointOffsetMap.containsKey(checkpointId)) {
             log.warn("checkpoint {} do not exist or have already been committed.", checkpointId);
         } else {

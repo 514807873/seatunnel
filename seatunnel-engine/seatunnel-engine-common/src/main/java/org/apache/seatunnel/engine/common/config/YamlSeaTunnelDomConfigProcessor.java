@@ -259,6 +259,8 @@ public class YamlSeaTunnelDomConfigProcessor extends AbstractDomConfigProcessor 
                     .key()
                     .equals(name)) {
                 engineConfig.setCoordinatorServiceConfig(parseCoordinatorServiceConfig(node));
+            } else if (ServerConfigOptions.MasterServerConfigOptions.PANGU_STORE.equals(name)) {
+                // Parsed by PanguStore from seatunnel.yaml; accept the node to avoid warnings.
             } else {
                 LOGGER.warning("Unrecognized element: " + name);
             }

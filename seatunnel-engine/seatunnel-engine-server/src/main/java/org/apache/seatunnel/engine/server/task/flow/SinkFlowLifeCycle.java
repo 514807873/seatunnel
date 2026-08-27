@@ -26,6 +26,7 @@ import org.apache.seatunnel.api.sink.SinkWriter.Context;
 import org.apache.seatunnel.api.sink.SupportSchemaEvolutionSinkWriter;
 import org.apache.seatunnel.api.sink.event.WriterCloseEvent;
 import org.apache.seatunnel.api.sink.multitablesink.MultiTableSink;
+import org.apache.seatunnel.api.state.CheckpointListener;
 import org.apache.seatunnel.api.table.catalog.CatalogTable;
 import org.apache.seatunnel.api.table.catalog.TablePath;
 import org.apache.seatunnel.api.table.schema.event.SchemaChangeEvent;
@@ -309,6 +310,9 @@ public class SinkFlowLifeCycle<T, CommitInfoT extends Serializable, AggregatedCo
     public void notifyCheckpointComplete(long checkpointId) throws Exception {
         if (committer.isPresent() && lastCommitInfo.isPresent()) {
             committer.get().commit(Collections.singletonList(lastCommitInfo.get()));
+        }
+        if (writer instanceof CheckpointListener) {
+            ((CheckpointListener) writer).notifyCheckpointComplete(checkpointId);
         }
         connectorMetricsCalcContext.commitPendingMetrics(checkpointId);
     }

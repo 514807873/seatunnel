@@ -41,9 +41,7 @@ public class XjJdbcSinkFactory implements TableSinkFactory {
     public OptionRule optionRule() {
         return OptionRule.builder()
                 .required(
-                        XjJdbcSinkOptions.URL,
-                        XjJdbcSinkOptions.DRIVER,
-                        XjJdbcSinkOptions.DB_TYPE)
+                        XjJdbcSinkOptions.URL, XjJdbcSinkOptions.DRIVER, XjJdbcSinkOptions.DB_TYPE)
                 .optional(
                         XjJdbcSinkOptions.USER,
                         XjJdbcSinkOptions.PASSWORD,

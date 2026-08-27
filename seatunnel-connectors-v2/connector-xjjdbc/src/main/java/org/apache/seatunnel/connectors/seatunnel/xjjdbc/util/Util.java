@@ -92,8 +92,7 @@ public final class Util {
         }
         if ("com.mysql.jdbc.Driver".equalsIgnoreCase(driverName)) {
             return loadDriverFromJar(
-                    oldDriverHome() + "/mysql-connector-java-5.1.43.jar",
-                    "com.mysql.jdbc.Driver");
+                    oldDriverHome() + "/mysql-connector-java-5.1.43.jar", "com.mysql.jdbc.Driver");
         }
         Enumeration<Driver> drivers = DriverManager.getDrivers();
         while (drivers.hasMoreElements()) {

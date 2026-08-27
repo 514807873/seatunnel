@@ -98,8 +98,7 @@ public interface XjJdbcDialect extends Serializable {
             throws SQLException {
         String columns =
                 sinkColumns.stream().map(this::quoteIdentifier).collect(Collectors.joining(", "));
-        String sql =
-                String.format("select %s from %s where 1=2", columns, tableWithSchema(config));
+        String sql = String.format("select %s from %s where 1=2", columns, tableWithSchema(config));
         Map<String, String> result = new TreeMap<>(String.CASE_INSENSITIVE_ORDER);
         try (PreparedStatement ps = conn.prepareStatement(sql)) {
             // Execute first, then read metadata. Some drivers (e.g. ClickHouse native
@@ -129,11 +128,7 @@ public interface XjJdbcDialect extends Serializable {
      * specific special handling.
      */
     default void bindValue(
-            PreparedStatement ps,
-            int index,
-            Object value,
-            SqlType sourceSqlType,
-            String sinkDbType)
+            PreparedStatement ps, int index, Object value, SqlType sourceSqlType, String sinkDbType)
             throws SQLException {
         if (value == null) {
             ps.setNull(index, Types.NULL);

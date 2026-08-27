@@ -29,12 +29,10 @@ seatunnel:
       interval: 10000
       timeout: 60000
       storage:
-        type: hdfs
+        type: localfile
         max-retained: 3
         plugin-config:
-          namespace: /tmp/seatunnel/checkpoint_snapshot
-          storage.type: hdfs
-          fs.defaultFS: file:///tmp/ # Ensure that the directory has written permission
+          namespace: C:\ProgramData\seatunnel\checkpoint\
     telemetry:
       metric:
         enabled: false
@@ -54,3 +52,12 @@ seatunnel:
       url: "http://192.168.10.197:30863/st/zeta/callBack"
       headers:
         Content-Type: application/json
+    # Direct write to Pangu MySQL / ClickHouse. Empty url disables that store.
+    # Need mysql-connector and clickhouse-jdbc on the engine classpath (lib/).
+    pangu-store:
+      url: "jdbc:mysql://192.168.10.197:30316/pangu?characterEncoding=utf8&zeroDateTimeBehavior=convertToNull&useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=GMT%2B8"
+      username: root
+      password: Admin#13579Mysql197
+      clickhouse-url: "jdbc:ch://192.168.10.197:30823/default?compress=true"
+      clickhouse-username: default
+      clickhouse-password: Admin#13579ClickHouse197

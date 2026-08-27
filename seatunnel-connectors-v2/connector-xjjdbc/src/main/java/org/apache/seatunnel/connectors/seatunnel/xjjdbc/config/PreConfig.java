@@ -18,7 +18,6 @@
 package org.apache.seatunnel.connectors.seatunnel.xjjdbc.config;
 
 import org.apache.seatunnel.shade.com.fasterxml.jackson.annotation.JsonIgnoreProperties;
-
 import org.apache.seatunnel.shade.org.apache.commons.lang3.StringUtils;
 
 import org.apache.seatunnel.connectors.seatunnel.xjjdbc.dialect.XjJdbcDialect;

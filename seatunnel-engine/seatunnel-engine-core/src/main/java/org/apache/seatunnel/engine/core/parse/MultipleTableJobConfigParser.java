@@ -329,6 +329,9 @@ public class MultipleTableJobConfigParser {
                 .setEnableCheckpoint(
                         (envOptions.get(EnvCommonOptions.CHECKPOINT_INTERVAL) != null)
                                 || jobMode == JobMode.STREAMING);
+        envOptions
+                .getOptional(EnvCommonOptions.PANGU_JOB_ID)
+                .ifPresent(id -> jobConfig.getJobContext().setPanguJobId(id));
         if (StringUtils.isEmpty(jobConfig.getName())
                 || jobConfig.getName().equals(Constants.LOGO)
                 || jobConfig.getName().equals(EnvCommonOptions.JOB_NAME.defaultValue())) {

@@ -19,7 +19,9 @@ package org.apache.seatunnel.connectors.seatunnel.jdbc.sink;
 
 import org.apache.seatunnel.shade.com.zaxxer.hikari.HikariDataSource;
 
+import org.apache.seatunnel.api.common.JobContext;
 import org.apache.seatunnel.api.sink.MultiTableResourceManager;
+import org.apache.seatunnel.api.state.CheckpointListener;
 import org.apache.seatunnel.api.table.catalog.TablePath;
 import org.apache.seatunnel.api.table.catalog.TableSchema;
 import org.apache.seatunnel.api.table.coordinator.SchemaCoordinator;
@@ -28,6 +30,8 @@ import org.apache.seatunnel.api.table.schema.exception.SinkWriterSchemaException
 import org.apache.seatunnel.api.table.type.RowKind;
 import org.apache.seatunnel.api.table.type.SeaTunnelRow;
 import org.apache.seatunnel.common.exception.CommonErrorCodeDeprecated;
+import org.apache.seatunnel.common.pangu.PanguJobIds;
+import org.apache.seatunnel.connectors.seatunnel.common.pangu.PanguStreamCounter;
 import org.apache.seatunnel.connectors.seatunnel.jdbc.config.JdbcSinkConfig;
 import org.apache.seatunnel.connectors.seatunnel.jdbc.exception.JdbcConnectorErrorCode;
 import org.apache.seatunnel.connectors.seatunnel.jdbc.exception.JdbcConnectorException;
@@ -48,10 +52,13 @@ import java.util.List;
 import java.util.Optional;
 
 @Slf4j
-public class JdbcSinkWriter extends AbstractJdbcSinkWriter<ConnectionPoolManager> {
+public class JdbcSinkWriter extends AbstractJdbcSinkWriter<ConnectionPoolManager>
+        implements CheckpointListener {
     private final Integer primaryKeyIndex;
     private SchemaCoordinator schemaCoordinator;
     private final CodeConverter codeConverter;
+    private final String panguJobId;
+    private final PanguStreamCounter streamCounter = new PanguStreamCounter();
 
     public JdbcSinkWriter(
             TablePath sinkTablePath,
@@ -60,12 +67,32 @@ public class JdbcSinkWriter extends AbstractJdbcSinkWriter<ConnectionPoolManager
             TableSchema tableSchema,
             TableSchema databaseTableSchema,
             Integer primaryKeyIndex) {
+        this(
+                sinkTablePath,
+                dialect,
+                jdbcSinkConfig,
+                tableSchema,
+                databaseTableSchema,
+                primaryKeyIndex,
+                null);
+    }
+
+    public JdbcSinkWriter(
+            TablePath sinkTablePath,
+            JdbcDialect dialect,
+            JdbcSinkConfig jdbcSinkConfig,
+            TableSchema tableSchema,
+            TableSchema databaseTableSchema,
+            Integer primaryKeyIndex,
+            JobContext jobContext) {
         this.sinkTablePath = sinkTablePath;
         this.dialect = dialect;
         this.jdbcSinkConfig = jdbcSinkConfig;
         this.databaseTableSchema = databaseTableSchema;
         this.primaryKeyIndex = primaryKeyIndex;
         this.codeConverter = JdbcCodeMapperSupport.createCodeConverter(jdbcSinkConfig);
+        this.panguJobId =
+                PanguJobIds.resolve(jobContext == null ? null : jobContext.getPanguJobId());
         // Rebuild write schema with sink column names (XH/XM...) when field mapping is configured.
         // Upstream catalog schema still uses source names (ID/NAME...), which breaks upsert PK
         // lookup.
@@ -176,6 +203,12 @@ public class JdbcSinkWriter extends AbstractJdbcSinkWriter<ConnectionPoolManager
                             element, jdbcSinkConfig, tableSchema, codeConverter);
         }
         outputFormat.writeRecord(rowToWrite);
+        streamCounter.accept(element);
+    }
+
+    @Override
+    public void notifyCheckpointComplete(long checkpointId) {
+        streamCounter.flush(panguJobId);
     }
 
     @Override
@@ -227,6 +260,7 @@ public class JdbcSinkWriter extends AbstractJdbcSinkWriter<ConnectionPoolManager
 
     @Override
     public void close() throws IOException {
+        streamCounter.flush(panguJobId);
         tryOpen();
         outputFormat.flush();
         try {

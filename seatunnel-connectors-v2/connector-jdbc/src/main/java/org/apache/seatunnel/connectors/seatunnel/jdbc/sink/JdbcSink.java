@@ -149,7 +149,8 @@ public class JdbcSink
                         jdbcSinkConfig,
                         tableSchema,
                         getDatabaseTableSchema().orElse(null),
-                        primaryKeyIndex);
+                        primaryKeyIndex,
+                        jobContext);
             }
             sinkWriter =
                     new JdbcSinkWriter(
@@ -158,7 +159,8 @@ public class JdbcSink
                             jdbcSinkConfig,
                             tableSchema,
                             getDatabaseTableSchema().orElse(null),
-                            null);
+                            null,
+                            jobContext);
         }
         return sinkWriter;
     }

@@ -17,16 +17,13 @@
 
 package org.apache.seatunnel.connectors.cdc.base.source.reader;
 
-import org.apache.seatunnel.shade.com.google.common.util.concurrent.RateLimiter;
-
 import org.apache.seatunnel.api.common.metrics.Counter;
-import org.apache.seatunnel.api.event.DefaultEventProcessor;
 import org.apache.seatunnel.api.event.EventListener;
 import org.apache.seatunnel.api.source.Collector;
 import org.apache.seatunnel.api.source.SourceReader;
 import org.apache.seatunnel.api.source.event.MessageDelayedEvent;
 import org.apache.seatunnel.api.table.schema.event.SchemaChangeEvent;
-import org.apache.seatunnel.common.utils.JsonUtils;
+import org.apache.seatunnel.common.pangu.PanguStore;
 import org.apache.seatunnel.connectors.cdc.base.source.event.CompletedSnapshotPhaseEvent;
 import org.apache.seatunnel.connectors.cdc.base.source.offset.Offset;
 import org.apache.seatunnel.connectors.cdc.base.source.offset.OffsetFactory;
@@ -41,19 +38,16 @@ import org.apache.kafka.connect.source.SourceRecord;
 
 import lombok.extern.slf4j.Slf4j;
 
-import java.lang.reflect.Field;
 import java.time.Duration;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.Map;
-import java.util.Optional;
 
 import static org.apache.seatunnel.connectors.cdc.base.source.split.wartermark.WatermarkEvent.isHighWatermarkEvent;
 import static org.apache.seatunnel.connectors.cdc.base.source.split.wartermark.WatermarkEvent.isLowWatermarkEvent;
 import static org.apache.seatunnel.connectors.cdc.base.source.split.wartermark.WatermarkEvent.isSchemaChangeAfterWatermarkEvent;
 import static org.apache.seatunnel.connectors.cdc.base.source.split.wartermark.WatermarkEvent.isSchemaChangeBeforeWatermarkEvent;
 import static org.apache.seatunnel.connectors.cdc.base.source.split.wartermark.WatermarkEvent.isWatermarkEvent;
-import static org.apache.seatunnel.connectors.cdc.base.utils.ObjectUtils.sendPostRequest;
 import static org.apache.seatunnel.connectors.cdc.base.utils.SourceRecordUtils.getFetchTimestamp;
 import static org.apache.seatunnel.connectors.cdc.base.utils.SourceRecordUtils.getMessageTimestamp;
 import static org.apache.seatunnel.connectors.cdc.base.utils.SourceRecordUtils.isDataChangeRecord;
@@ -84,10 +78,9 @@ public class IncrementalSourceRecordEmitter<T>
     protected final EventListener eventListener;
     protected final MessageDelayedEventLimiter delayedEventLimiter =
             new MessageDelayedEventLimiter(Duration.ofSeconds(1), 0.5d);
-    private final RateLimiter rateLimiter = RateLimiter.create(2.0);
-    private Optional<String> flinkJobId = Optional.empty();
-    private final String stOffsetUrl =
-            System.getenv("ST_SERVICE_URL") + "/SeaTunnelJob/recordOffset";
+    private String panguJobId;
+    private volatile String pendingFileName;
+    private volatile String pendingPosition;
 
     public IncrementalSourceRecordEmitter(
             DebeziumDeserializationSchema<T> debeziumDeserializationSchema,
@@ -100,18 +93,18 @@ public class IncrementalSourceRecordEmitter<T>
         this.recordFetchDelay = context.getMetricsContext().counter(CDC_RECORD_FETCH_DELAY);
         this.recordEmitDelay = context.getMetricsContext().counter(CDC_RECORD_EMIT_DELAY);
         this.eventListener = context.getEventListener();
-        if (context.getEventListener() instanceof DefaultEventProcessor) {
-            DefaultEventProcessor defaultEventProcessor =
-                    (DefaultEventProcessor) context.getEventListener();
-            try {
-                Field field = DefaultEventProcessor.class.getDeclaredField("jobId");
-                field.setAccessible(true);
-                Object jobId = field.get(defaultEventProcessor);
-                this.flinkJobId = Optional.of(String.valueOf(jobId));
-            } catch (NoSuchFieldException | IllegalAccessException e) {
-                throw new RuntimeException(e);
-            }
+    }
+
+    public void setPanguJobId(String panguJobId) {
+        this.panguJobId = panguJobId;
+    }
+
+    public void flushPanguOffset() {
+        String fileName = pendingFileName;
+        if (fileName == null) {
+            return;
         }
+        PanguStore.getInstance().upsertOffset(panguJobId, fileName, pendingPosition);
     }
 
     @Override
@@ -148,48 +141,27 @@ public class IncrementalSourceRecordEmitter<T>
                 eventListener.onEvent(new MessageDelayedEvent(emitDelay, element.toString()));
             }
         }
-        reportOffsetToService(element);
+        rememberOffset(element);
     }
 
-    private void reportOffsetToService(SourceRecord element) {
-        new Thread(
-                        () -> {
-                            if (!rateLimiter.tryAcquire()) {
-                                return;
-                            }
-                            Map<String, ?> sourceOffset = element.sourceOffset();
-                            if (sourceOffset == null || !flinkJobId.isPresent()) {
-                                return;
-                            }
-                            String fileName = null;
-                            String position = null;
-                            if (sourceOffset.get("file") != null
-                                    && !"".equals(sourceOffset.get("file").toString())) {
-                                // MySQL-CDC: binlog file + position
-                                fileName = sourceOffset.get("file").toString();
-                                position =
-                                        sourceOffset.get("pos") == null
-                                                ? null
-                                                : sourceOffset.get("pos").toString();
-                            } else if (sourceOffset.get("commit_lsn") != null
-                                    && !"".equals(sourceOffset.get("commit_lsn").toString())) {
-                                // SqlServer-CDC: commit LSN
-                                fileName = sourceOffset.get("commit_lsn").toString();
-                            }
-                            if (fileName == null) {
-                                return;
-                            }
-                            Map<String, Object> param = new HashMap<>();
-                            param.put("flinkJobId", flinkJobId.get());
-                            param.put("fileName", fileName);
-                            param.put("position", position);
-                            try {
-                                sendPostRequest(stOffsetUrl, JsonUtils.toJsonString(param));
-                            } catch (Exception e) {
-                                throw new RuntimeException(e);
-                            }
-                        })
-                .start();
+    private void rememberOffset(SourceRecord element) {
+        Map<String, ?> sourceOffset = element.sourceOffset();
+        if (sourceOffset == null) {
+            return;
+        }
+        if (sourceOffset.get("file") != null && !"".equals(sourceOffset.get("file").toString())) {
+            pendingFileName = sourceOffset.get("file").toString();
+            pendingPosition =
+                    sourceOffset.get("pos") == null ? null : sourceOffset.get("pos").toString();
+        } else if (sourceOffset.get("commit_lsn") != null
+                && !"".equals(sourceOffset.get("commit_lsn").toString())) {
+            pendingFileName = sourceOffset.get("commit_lsn").toString();
+            pendingPosition = null;
+        } else if (sourceOffset.get("scn") != null
+                && !"".equals(sourceOffset.get("scn").toString())) {
+            pendingFileName = sourceOffset.get("scn").toString();
+            pendingPosition = null;
+        }
     }
 
     protected void processElement(

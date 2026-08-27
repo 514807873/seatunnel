@@ -60,9 +60,7 @@ public class HttpTransform extends AbstractCatalogSupportFlatMapTransform {
         this.subtaskIndex = subtaskIndex;
     }
 
-    /**
-     * Zeta 走 flatMap；Flink 定制路径仍可能调 mapList，两者共用同一套逻辑。
-     */
+    /** Zeta 走 flatMap；Flink 定制路径仍可能调 mapList，两者共用同一套逻辑。 */
     @Override
     public List<SeaTunnelRow> mapList(SeaTunnelRow inputRow) {
         return flatMap(inputRow);
@@ -113,7 +111,8 @@ public class HttpTransform extends AbstractCatalogSupportFlatMapTransform {
                                     .body(obj.toString())
                                     .execute()) {
                         if (response.isOk()) {
-                            Map<String, List<String>> dataSet = parseResponseToDataSet(response, obj);
+                            Map<String, List<String>> dataSet =
+                                    parseResponseToDataSet(response, obj);
                             if (dataSet.isEmpty()
                                     || new ArrayList<>(dataSet.values()).get(0).isEmpty()) {
                                 loop_count = 0;
@@ -148,8 +147,7 @@ public class HttpTransform extends AbstractCatalogSupportFlatMapTransform {
                             .execute()) {
                 if (response.isOk()) {
                     Map<String, List<String>> dataSet = parseResponseToDataSet(response, obj);
-                    if (!dataSet.isEmpty()
-                            && !new ArrayList<>(dataSet.values()).get(0).isEmpty()) {
+                    if (!dataSet.isEmpty() && !new ArrayList<>(dataSet.values()).get(0).isEmpty()) {
                         rows.addAll(buildRows(dataSet));
                     }
                     log.info("subtask={}, 请求参数{}", subtaskIndex, obj);
@@ -163,7 +161,8 @@ public class HttpTransform extends AbstractCatalogSupportFlatMapTransform {
         return rows;
     }
 
-    private Map<String, List<String>> parseResponseToDataSet(HttpResponse response, JSONObject obj) {
+    private Map<String, List<String>> parseResponseToDataSet(
+            HttpResponse response, JSONObject obj) {
         Map<String, List<String>> dataSet = new HashMap<>();
         ReadContext ctx = JsonPath.using(jsonConfiguration).parse(response.body());
         Map<String, String> jsonField = config.getJsonField();
@@ -176,8 +175,7 @@ public class HttpTransform extends AbstractCatalogSupportFlatMapTransform {
             List<?> valuesList = ctx.read(value);
             if (key.startsWith("cspz_") && areAllNull(valuesList)) {
                 List<String> newValuesList = new ArrayList<>();
-                valuesList.forEach(
-                        item -> newValuesList.add(obj.getStr(key.replace("cspz_", ""))));
+                valuesList.forEach(item -> newValuesList.add(obj.getStr(key.replace("cspz_", ""))));
                 dataSet.put(key, newValuesList);
             } else {
                 dataSet.put(key, toStringList(valuesList));

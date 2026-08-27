@@ -79,8 +79,8 @@ public class HttpConfig implements Serializable {
             ServerConfigOptions.MasterServerConfigOptions.BASIC_AUTH_PASSWORD.defaultValue();
 
     /**
-     * Optional public base URL for rewriting WebUI log links (K8s NodePort / Ingress). Empty =
-     * keep direct node IP links (bare-metal compatible).
+     * Optional public base URL for rewriting WebUI log links (K8s NodePort / Ingress). Empty = keep
+     * direct node IP links (bare-metal compatible).
      */
     private String publicUrl =
             ServerConfigOptions.MasterServerConfigOptions.PUBLIC_URL.defaultValue();

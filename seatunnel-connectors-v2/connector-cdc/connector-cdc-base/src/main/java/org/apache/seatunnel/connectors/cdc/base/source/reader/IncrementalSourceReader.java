@@ -123,6 +123,9 @@ public class IncrementalSourceReader<T, C extends SourceConfig>
     @Override
     public void notifyCheckpointComplete(long checkpointId) throws Exception {
         dataSourceDialect.commitChangeLogOffset(snapshotChangeLogOffset);
+        if (recordEmitter instanceof IncrementalSourceRecordEmitter) {
+            ((IncrementalSourceRecordEmitter<?>) recordEmitter).flushPanguOffset();
+        }
     }
 
     @Override

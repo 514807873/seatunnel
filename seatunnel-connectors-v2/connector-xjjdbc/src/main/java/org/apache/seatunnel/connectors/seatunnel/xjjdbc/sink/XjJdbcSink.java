@@ -90,7 +90,8 @@ public class XjJdbcSink extends AbstractSimpleSink<SeaTunnelRow, Void> {
             throws IOException {
         runPreConfig();
         String flinkJobId = jobContext == null ? null : jobContext.getJobId();
-        return new XjJdbcSinkWriter(seaTunnelRowType, context, sinkConfig, flinkJobId);
+        String panguJobId = jobContext == null ? null : jobContext.getPanguJobId();
+        return new XjJdbcSinkWriter(seaTunnelRowType, context, sinkConfig, flinkJobId, panguJobId);
     }
 
     @Override

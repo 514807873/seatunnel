@@ -273,8 +273,7 @@ public class RestHttpGetCommandProcessor extends HttpCommandProcessor<HttpGetCom
         } else {
             java.util.Optional<String[]> proxy = LogService.parseProxyPath(logName);
             if (proxy.isPresent()) {
-                String content =
-                        logService.fetchNodeLogContent(proxy.get()[0], proxy.get()[1]);
+                String content = logService.fetchNodeLogContent(proxy.get()[0], proxy.get()[1]);
                 if (content == null) {
                     httpGetCommand.send400();
                     return;

@@ -21,6 +21,7 @@ import org.apache.seatunnel.api.sink.MultiTableResourceManager;
 import org.apache.seatunnel.api.sink.SinkWriter;
 import org.apache.seatunnel.api.sink.SupportMultiTableSinkWriter;
 import org.apache.seatunnel.api.sink.SupportSchemaEvolutionSinkWriter;
+import org.apache.seatunnel.api.state.CheckpointListener;
 import org.apache.seatunnel.api.table.schema.event.FlushEvent;
 import org.apache.seatunnel.api.table.schema.event.SchemaChangeEvent;
 import org.apache.seatunnel.api.table.type.SeaTunnelRow;
@@ -48,7 +49,8 @@ import java.util.concurrent.atomic.AtomicInteger;
 @Slf4j
 public class MultiTableSinkWriter
         implements SinkWriter<SeaTunnelRow, MultiTableCommitInfo, MultiTableState>,
-                SupportSchemaEvolutionSinkWriter {
+                SupportSchemaEvolutionSinkWriter,
+                CheckpointListener {
 
     private final Map<SinkIdentifier, SinkWriter<SeaTunnelRow, ?, ?>> sinkWriters;
     private final Map<SinkIdentifier, SinkWriter.Context> sinkWritersContext;
@@ -309,6 +311,20 @@ public class MultiTableSinkWriter
             return Optional.empty();
         }
         return Optional.of(multiTableCommitInfo);
+    }
+
+    @Override
+    public void notifyCheckpointComplete(long checkpointId) throws Exception {
+        for (int i = 0; i < sinkWritersWithIndex.size(); i++) {
+            synchronized (runnable.get(i)) {
+                for (SinkWriter<SeaTunnelRow, ?, ?> sinkWriter :
+                        sinkWritersWithIndex.get(i).values()) {
+                    if (sinkWriter instanceof CheckpointListener) {
+                        ((CheckpointListener) sinkWriter).notifyCheckpointComplete(checkpointId);
+                    }
+                }
+            }
+        }
     }
 
     @Override

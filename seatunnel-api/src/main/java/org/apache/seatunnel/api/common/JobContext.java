@@ -33,6 +33,9 @@ public final class JobContext implements Serializable {
     private JobMode jobMode;
     private boolean enableCheckpoint;
     private String jobId;
+    /** Pangu interface id for offset / stream_record. Not the Zeta engine Long jobId. */
+    private String panguJobId;
+
     private int isRecordErrorData;
     private int maxRecordNumber;
 
@@ -56,6 +59,10 @@ public final class JobContext implements Serializable {
 
     public void setJobId(String jobId) {
         this.jobId = jobId;
+    }
+
+    public void setPanguJobId(String panguJobId) {
+        this.panguJobId = panguJobId;
     }
 
     public void setIsRecordErrorData(int isRecordErrorData) {

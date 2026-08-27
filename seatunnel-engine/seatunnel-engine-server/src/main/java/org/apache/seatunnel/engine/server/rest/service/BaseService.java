@@ -30,6 +30,7 @@ import org.apache.seatunnel.api.configuration.ReadonlyConfig;
 import org.apache.seatunnel.api.options.EnvCommonOptions;
 import org.apache.seatunnel.api.table.catalog.TablePath;
 import org.apache.seatunnel.common.constants.PluginType;
+import org.apache.seatunnel.common.pangu.PanguStore;
 import org.apache.seatunnel.common.utils.DateTimeUtils;
 import org.apache.seatunnel.engine.common.Constant;
 import org.apache.seatunnel.engine.common.config.JobConfig;
@@ -836,6 +837,7 @@ public abstract class BaseService {
             Node node) {
         ReadonlyConfig envOptions = ReadonlyConfig.fromConfig(config.getConfig("env"));
         String jobName = envOptions.get(EnvCommonOptions.JOB_NAME);
+        String panguJobId = envOptions.getOptional(EnvCommonOptions.PANGU_JOB_ID).orElse(null);
 
         JobConfig jobConfig = new JobConfig();
         jobConfig.setName(
@@ -850,7 +852,13 @@ public abstract class BaseService {
         RestJobExecutionEnvironment restJobExecutionEnvironment =
                 new RestJobExecutionEnvironment(
                         seaTunnelServer, jobConfig, config, node, startWithSavePoint, finalJobId);
-        JobImmutableInformation jobImmutableInformation = restJobExecutionEnvironment.build();
+        JobImmutableInformation jobImmutableInformation;
+        try {
+            jobImmutableInformation = restJobExecutionEnvironment.build();
+        } catch (RuntimeException e) {
+            PanguStore.getInstance().recordSubmitFailure(panguJobId, e);
+            throw e;
+        }
         long jobId = jobImmutableInformation.getJobId();
         if (!seaTunnelServer.isMasterNode()) {
 

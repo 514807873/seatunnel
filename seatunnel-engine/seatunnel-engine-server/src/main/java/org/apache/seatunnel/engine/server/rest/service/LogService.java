@@ -104,7 +104,11 @@ public class LogService extends BaseLogService {
                                 }
                                 String logLink =
                                         buildLogContentLink(
-                                                publicUrl, contextPath, directBaseUrl, node, fileName);
+                                                publicUrl,
+                                                contextPath,
+                                                directBaseUrl,
+                                                node,
+                                                fileName);
                                 allLogNameList.add(new Tuple3<>(node, logLink, fileName));
                             });
                 });
@@ -117,9 +121,20 @@ public class LogService extends BaseLogService {
      * gateway and is reverse-proxied to the real node. Otherwise keep the direct node URL.
      */
     static String buildLogContentLink(
-            String publicUrl, String contextPath, String directBaseUrl, String node, String fileName) {
+            String publicUrl,
+            String contextPath,
+            String directBaseUrl,
+            String node,
+            String fileName) {
         if (StringUtils.isNotBlank(publicUrl)) {
-            return publicUrl + contextPath + REST_URL_LOGS + "/" + LOG_PROXY_PREFIX + node + "/" + fileName;
+            return publicUrl
+                    + contextPath
+                    + REST_URL_LOGS
+                    + "/"
+                    + LOG_PROXY_PREFIX
+                    + node
+                    + "/"
+                    + fileName;
         }
         return directBaseUrl + REST_URL_LOGS + "/" + fileName;
     }
@@ -151,15 +166,16 @@ public class LogService extends BaseLogService {
         }
         String node = rest.substring(0, slash);
         String fileName = rest.substring(slash + 1);
-        if (!node.contains(":") || !fileName.endsWith(".log") || fileName.contains("..") || fileName.contains("/")) {
+        if (!node.contains(":")
+                || !fileName.endsWith(".log")
+                || fileName.contains("..")
+                || fileName.contains("/")) {
             return Optional.empty();
         }
         return Optional.of(new String[] {node, fileName});
     }
 
-    /**
-     * Fetch log content from a cluster-internal node. Used by the public-url reverse proxy.
-     */
+    /** Fetch log content from a cluster-internal node. Used by the public-url reverse proxy. */
     public String fetchNodeLogContent(String node, String fileName) {
         SeaTunnelServer seaTunnelServer = getSeaTunnelServer(false);
         HttpConfig httpConfig =

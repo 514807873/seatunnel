@@ -116,7 +116,8 @@ public class OracleSourceConfigFactory extends JdbcSourceConfigFactory {
         props.setProperty("tombstones.on.delete", String.valueOf(false));
         props.setProperty(LOG_MINING_READONLY_KEY, "true");
         props.setProperty(
-                "lob.enabled", String.valueOf(lobEnabled == null || Boolean.TRUE.equals(lobEnabled)));
+                "lob.enabled",
+                String.valueOf(lobEnabled == null || Boolean.TRUE.equals(lobEnabled)));
 
         if (originUrl != null) {
             props.setProperty("database.url", originUrl);

@@ -47,7 +47,8 @@ public class EnvOptionRule implements Factory {
                         EnvCommonOptions.READ_LIMIT_BYTES_PER_SECOND,
                         EnvCommonOptions.SAVEMODE_EXECUTE_LOCATION,
                         EnvCommonOptions.CUSTOM_PARAMETERS,
-                        EnvCommonOptions.NODE_TAG_FILTER)
+                        EnvCommonOptions.NODE_TAG_FILTER,
+                        EnvCommonOptions.PANGU_JOB_ID)
                 .build();
     }
 }

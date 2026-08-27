@@ -4,6 +4,10 @@ import org.apache.seatunnel.connectors.seatunnel.jdbc.internal.converter.JdbcRow
 import org.apache.seatunnel.connectors.seatunnel.jdbc.internal.dialect.JdbcDialect;
 import org.apache.seatunnel.connectors.seatunnel.jdbc.internal.dialect.JdbcDialectTypeMapper;
 
+import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.ResultSetMetaData;
+import java.sql.SQLException;
 import java.util.Arrays;
 import java.util.HashSet;
 import java.util.Optional;
@@ -26,6 +30,19 @@ public class ClickHouseDialect implements JdbcDialect {
     @Override
     public JdbcDialectTypeMapper getJdbcDialectTypeMapper() {
         return new ClickHouseTypeMapper();
+    }
+
+    /**
+     * Native ClickHouse JDBC (housepower) only exposes column metadata after execute. Keep the
+     * 2.3.5-qinhuan wrapper so getMetaData() is not called on a null ResultSet.
+     */
+    @Override
+    public ResultSetMetaData getResultSetMetaData(Connection conn, String query)
+            throws SQLException {
+        PreparedStatement ps =
+                conn.prepareStatement(String.format("select * from  (%s) a where 1=2 ", query));
+        ps.executeQuery();
+        return ps.getMetaData();
     }
 
     @Override

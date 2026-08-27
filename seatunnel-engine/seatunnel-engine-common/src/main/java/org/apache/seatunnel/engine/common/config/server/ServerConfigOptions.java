@@ -287,10 +287,9 @@ public class ServerConfigOptions {
                         .withDescription("The password for basic authentication.");
 
         /**
-         * External base URL for WebUI log links (e.g. K8s NodePort
-         * http://192.168.10.197:30890). When set, /logs JSON/HTML returns
-         * proxy links under this URL instead of unreachable Pod IPs. Leave
-         * empty for bare-metal / direct deploy.
+         * External base URL for WebUI log links (e.g. K8s NodePort http://192.168.10.197:30890).
+         * When set, /logs JSON/HTML returns proxy links under this URL instead of unreachable Pod
+         * IPs. Leave empty for bare-metal / direct deploy.
          */
         public static final Option<String> PUBLIC_URL =
                 Options.key("public-url")
@@ -309,6 +308,11 @@ public class ServerConfigOptions {
         public static final String EVENT_REPORT_HTTP = "event-report-http";
         public static final String EVENT_REPORT_HTTP_URL = "url";
         public static final String EVENT_REPORT_HTTP_HEADERS = "headers";
+
+        public static final String PANGU_STORE = "pangu-store";
+        public static final String PANGU_STORE_URL = "url";
+        public static final String PANGU_STORE_USERNAME = "username";
+        public static final String PANGU_STORE_PASSWORD = "password";
 
         // The options for http server end
         /////////////////////////////////////////////////////

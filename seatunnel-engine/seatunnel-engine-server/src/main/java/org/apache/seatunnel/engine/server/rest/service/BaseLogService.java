@@ -74,9 +74,7 @@ public class BaseLogService extends BaseService {
         return sendGet(urlString, user, pass, 5000, 5000);
     }
 
-    /**
-     * Send GET with custom timeouts (used for log proxy where files can be large).
-     */
+    /** Send GET with custom timeouts (used for log proxy where files can be large). */
     protected String sendGet(
             String urlString, String user, String pass, int connectTimeoutMs, int readTimeoutMs) {
         HttpURLConnection connection = null;

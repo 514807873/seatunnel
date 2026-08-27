@@ -20,10 +20,13 @@ package org.apache.seatunnel.connectors.seatunnel.xjjdbc.sink;
 import org.apache.seatunnel.shade.org.apache.commons.lang3.StringUtils;
 
 import org.apache.seatunnel.api.sink.SinkWriter;
+import org.apache.seatunnel.api.state.CheckpointListener;
 import org.apache.seatunnel.api.table.type.RowKind;
 import org.apache.seatunnel.api.table.type.SeaTunnelRow;
 import org.apache.seatunnel.api.table.type.SeaTunnelRowType;
+import org.apache.seatunnel.common.pangu.PanguJobIds;
 import org.apache.seatunnel.common.utils.JsonUtils;
+import org.apache.seatunnel.connectors.seatunnel.common.pangu.PanguStreamCounter;
 import org.apache.seatunnel.connectors.seatunnel.common.sink.AbstractSinkWriter;
 import org.apache.seatunnel.connectors.seatunnel.xjjdbc.config.XjJdbcSinkConfig;
 import org.apache.seatunnel.connectors.seatunnel.xjjdbc.converter.ColumnMapper;
@@ -47,13 +50,16 @@ import java.util.Set;
 
 /** Full-load (complete) sink writer: buffered batch INSERT with per-row retry and error landing. */
 @Slf4j
-public class XjJdbcSinkWriter extends AbstractSinkWriter<SeaTunnelRow, Void> {
+public class XjJdbcSinkWriter extends AbstractSinkWriter<SeaTunnelRow, Void>
+        implements CheckpointListener {
 
     private final SeaTunnelRowType sourceRowType;
     private final XjJdbcSinkConfig config;
     private final XjJdbcDialect dialect;
     private final String flinkJobId;
+    private final String panguJobId;
     private final int subtaskIndex;
+    private final PanguStreamCounter streamCounter = new PanguStreamCounter();
 
     private final Connection conn;
     private final List<ColumnMapper> columnMappers;
@@ -70,10 +76,12 @@ public class XjJdbcSinkWriter extends AbstractSinkWriter<SeaTunnelRow, Void> {
             SeaTunnelRowType sourceRowType,
             SinkWriter.Context context,
             XjJdbcSinkConfig config,
-            String flinkJobId) {
+            String flinkJobId,
+            String panguJobId) {
         this.sourceRowType = sourceRowType;
         this.config = config;
         this.flinkJobId = flinkJobId;
+        this.panguJobId = PanguJobIds.resolve(panguJobId);
         this.subtaskIndex = context.getIndexOfSubtask();
         this.dialect = XjJdbcDialectFactory.getJdbcDialect(config.getDbType());
         try {
@@ -138,6 +146,7 @@ public class XjJdbcSinkWriter extends AbstractSinkWriter<SeaTunnelRow, Void> {
             return;
         }
         midCount.setWriteCount(midCount.getWriteCount() + 1);
+        streamCounter.accept(element);
         truncateOnFirstRowIfNeeded();
         buffer.add(element);
         if (buffer.size() >= config.getBatchSize()) {
@@ -275,9 +284,15 @@ public class XjJdbcSinkWriter extends AbstractSinkWriter<SeaTunnelRow, Void> {
     }
 
     @Override
+    public void notifyCheckpointComplete(long checkpointId) {
+        streamCounter.flush(panguJobId);
+    }
+
+    @Override
     public void close() throws IOException {
         try {
             flush();
+            streamCounter.flush(panguJobId);
             log.info(
                     "XjJdbc sink subtask {} finished. write={}, insert={}, error={}",
                     subtaskIndex,
