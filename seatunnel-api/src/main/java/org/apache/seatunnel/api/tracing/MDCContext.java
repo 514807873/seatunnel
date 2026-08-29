@@ -58,7 +58,8 @@ public class MDCContext implements Serializable, Closeable {
     public static final String TASK_ID = "ST-TID";
     public static final String PANGU_JOB_ID = "ST-PGID";
 
-    private static final ConcurrentHashMap<Long, String> PANGU_BY_ENGINE = new ConcurrentHashMap<>();
+    private static final ConcurrentHashMap<Long, String> PANGU_BY_ENGINE =
+            new ConcurrentHashMap<>();
 
     private final Long jobId;
     private final Long pipelineId;
@@ -184,7 +185,8 @@ public class MDCContext implements Serializable, Closeable {
     }
 
     public static MDCContext of(MDCContext context) {
-        return new MDCContext(context.jobId, context.pipelineId, context.taskId, context.panguJobId);
+        return new MDCContext(
+                context.jobId, context.pipelineId, context.taskId, context.panguJobId);
     }
 
     public static MDCContext current() {
