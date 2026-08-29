@@ -25,6 +25,7 @@ import org.apache.seatunnel.api.table.type.RowKind;
 import org.apache.seatunnel.api.table.type.SeaTunnelRow;
 import org.apache.seatunnel.api.table.type.SeaTunnelRowType;
 import org.apache.seatunnel.common.pangu.PanguJobIds;
+import org.apache.seatunnel.common.pangu.PanguStore;
 import org.apache.seatunnel.common.utils.JsonUtils;
 import org.apache.seatunnel.connectors.seatunnel.common.pangu.PanguStreamCounter;
 import org.apache.seatunnel.connectors.seatunnel.common.sink.AbstractSinkWriter;
@@ -71,6 +72,7 @@ public class XjJdbcSinkWriter extends AbstractSinkWriter<SeaTunnelRow, Void>
 
     private Connection errorConn;
     private boolean truncated = false;
+    private long lastMonitorInsertCount = 0L;
 
     public XjJdbcSinkWriter(
             SeaTunnelRowType sourceRowType,
@@ -286,6 +288,7 @@ public class XjJdbcSinkWriter extends AbstractSinkWriter<SeaTunnelRow, Void>
     @Override
     public void notifyCheckpointComplete(long checkpointId) {
         streamCounter.flush(panguJobId);
+        flushJobMonitorRead();
     }
 
     @Override
@@ -293,6 +296,7 @@ public class XjJdbcSinkWriter extends AbstractSinkWriter<SeaTunnelRow, Void>
         try {
             flush();
             streamCounter.flush(panguJobId);
+            flushJobMonitorRead();
             log.info(
                     "XjJdbc sink subtask {} finished. write={}, insert={}, error={}",
                     subtaskIndex,
@@ -303,6 +307,16 @@ public class XjJdbcSinkWriter extends AbstractSinkWriter<SeaTunnelRow, Void>
             closeQuietly(conn);
             closeQuietly(errorConn);
         }
+    }
+
+    private void flushJobMonitorRead() {
+        long current = midCount.getInsertCount();
+        long delta = current - lastMonitorInsertCount;
+        if (delta <= 0) {
+            return;
+        }
+        lastMonitorInsertCount = current;
+        PanguStore.getInstance().addJobMonitorRead(panguJobId, delta);
     }
 
     private void closeQuietly(Connection connection) {

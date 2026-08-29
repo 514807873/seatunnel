@@ -66,6 +66,10 @@ public final class PanguStore {
                     + "(jobId, flinkJobId, threadName, createTime, loggerName, level, message) "
                     + "VALUES (?, ?, ?, ?, ?, ?, ?)";
 
+    private static final String MONITOR_READ_SQL =
+            "UPDATE seatunnel_jobs_monitor SET read_count = IFNULL(read_count, 0) + ?, "
+                    + "endTime = NOW() WHERE job_id = ? ORDER BY startTime DESC LIMIT 1";
+
     private static final String LOGGER_ZETA_SUBMIT = "ZetaSubmit";
 
     private static final PanguStore INSTANCE = new PanguStore();
@@ -171,6 +175,23 @@ public final class PanguStore {
                                 fileName,
                                 position,
                                 e);
+                    }
+                });
+    }
+
+    public void addJobMonitorRead(String panguJobId, long writeDelta) {
+        if (!enabled || isBlank(panguJobId) || writeDelta <= 0) {
+            return;
+        }
+        executor.execute(
+                () -> {
+                    try (Connection conn = open();
+                            PreparedStatement ps = conn.prepareStatement(MONITOR_READ_SQL)) {
+                        ps.setLong(1, writeDelta);
+                        ps.setString(2, panguJobId);
+                        ps.executeUpdate();
+                    } catch (Exception e) {
+                        log.warn("PanguStore add jobs_monitor read failed, jobId={}", panguJobId, e);
                     }
                 });
     }
