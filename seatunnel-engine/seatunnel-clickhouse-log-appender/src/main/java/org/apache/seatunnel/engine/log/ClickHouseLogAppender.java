@@ -17,7 +17,6 @@
 
 package org.apache.seatunnel.engine.log;
 
-import com.clickhouse.jdbc.ClickHouseDataSource;
 import org.apache.logging.log4j.core.Core;
 import org.apache.logging.log4j.core.Filter;
 import org.apache.logging.log4j.core.Layout;
@@ -28,6 +27,8 @@ import org.apache.logging.log4j.core.config.plugins.Plugin;
 import org.apache.logging.log4j.core.config.plugins.PluginAttribute;
 import org.apache.logging.log4j.core.config.plugins.PluginElement;
 import org.apache.logging.log4j.core.config.plugins.PluginFactory;
+
+import com.clickhouse.jdbc.ClickHouseDataSource;
 
 import java.io.Serializable;
 import java.sql.Connection;
@@ -40,7 +41,8 @@ import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
 
 /**
- * log4j2 custom appender: async batch write Zeta job logs into ClickHouse {@code seatunnel_job_log}.
+ * log4j2 custom appender: async batch write Zeta job logs into ClickHouse {@code
+ * seatunnel_job_log}.
  *
  * <p>MDC {@code ST-JID} (engine Long) goes to {@code flinkJobId}; MDC {@code ST-PGID} (Pangu
  * interface id) goes to {@code jobId}. Only events carrying {@code ST-JID} are persisted.
@@ -204,7 +206,15 @@ public class ClickHouseLogAppender extends AbstractAppender {
             return null;
         }
         return new ClickHouseLogAppender(
-                name, filter, layout, true, url, username, password, table, batchSize,
+                name,
+                filter,
+                layout,
+                true,
+                url,
+                username,
+                password,
+                table,
+                batchSize,
                 batchTimeoutMs);
     }
 }
