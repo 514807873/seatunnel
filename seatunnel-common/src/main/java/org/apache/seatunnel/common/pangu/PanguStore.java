@@ -191,7 +191,8 @@ public final class PanguStore {
                         ps.setString(2, panguJobId);
                         ps.executeUpdate();
                     } catch (Exception e) {
-                        log.warn("PanguStore add jobs_monitor read failed, jobId={}", panguJobId, e);
+                        log.warn(
+                                "PanguStore add jobs_monitor read failed, jobId={}", panguJobId, e);
                     }
                 });
     }
