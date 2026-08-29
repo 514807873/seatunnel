@@ -24,6 +24,7 @@ import lombok.extern.slf4j.Slf4j;
 
 import java.io.Closeable;
 import java.io.Serializable;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * MDC context for tracing.
@@ -55,16 +56,43 @@ public class MDCContext implements Serializable, Closeable {
     public static final String JOB_ID = "ST-JID";
     public static final String PIPELINE_ID = "ST-PID";
     public static final String TASK_ID = "ST-TID";
+    public static final String PANGU_JOB_ID = "ST-PGID";
+
+    private static final ConcurrentHashMap<Long, String> PANGU_BY_ENGINE = new ConcurrentHashMap<>();
 
     private final Long jobId;
     private final Long pipelineId;
     private final Long taskId;
+    private final String panguJobId;
     private transient volatile MDCContext toRestore;
 
     public MDCContext(Long jobId, Long pipelineId, Long taskId) {
+        this(jobId, pipelineId, taskId, lookupPanguJobId(jobId));
+    }
+
+    public MDCContext(Long jobId, Long pipelineId, Long taskId, String panguJobId) {
         this.jobId = jobId;
         this.pipelineId = pipelineId;
         this.taskId = taskId;
+        this.panguJobId = panguJobId;
+    }
+
+    public static void bindPanguJobId(long engineJobId, String panguJobId) {
+        if (panguJobId == null || panguJobId.isEmpty()) {
+            return;
+        }
+        PANGU_BY_ENGINE.put(engineJobId, panguJobId);
+    }
+
+    public static void unbindPanguJobId(long engineJobId) {
+        PANGU_BY_ENGINE.remove(engineJobId);
+    }
+
+    private static String lookupPanguJobId(Long engineJobId) {
+        if (engineJobId == null) {
+            return null;
+        }
+        return PANGU_BY_ENGINE.get(engineJobId);
     }
 
     public synchronized MDCContext activate() {
@@ -87,6 +115,9 @@ public class MDCContext implements Serializable, Closeable {
             if (taskId != null) {
                 MDC.put(TASK_ID, String.valueOf(taskId));
             }
+            if (panguJobId != null && !panguJobId.isEmpty()) {
+                MDC.put(PANGU_JOB_ID, panguJobId);
+            }
         } catch (Throwable e) {
             log.error("Failed to put MDC context", e);
             throw e;
@@ -107,6 +138,7 @@ public class MDCContext implements Serializable, Closeable {
             MDC.remove(JOB_ID);
             MDC.remove(PIPELINE_ID);
             MDC.remove(TASK_ID);
+            MDC.remove(PANGU_JOB_ID);
         } catch (Throwable e) {
             log.error("Failed to clear MDC context", e);
             throw e;
@@ -129,9 +161,14 @@ public class MDCContext implements Serializable, Closeable {
         if (this == EMPTY) {
             return EMPTY_TO_STRING;
         }
-        return String.format(
-                "%d/%d/%d",
-                jobId, pipelineId == null ? 0 : pipelineId, taskId == null ? 0 : taskId);
+        String base =
+                String.format(
+                        "%d/%d/%d",
+                        jobId, pipelineId == null ? 0 : pipelineId, taskId == null ? 0 : taskId);
+        if (panguJobId == null || panguJobId.isEmpty()) {
+            return base;
+        }
+        return base + "/" + panguJobId;
     }
 
     public static MDCContext of(long jobId) {
@@ -147,7 +184,7 @@ public class MDCContext implements Serializable, Closeable {
     }
 
     public static MDCContext of(MDCContext context) {
-        return new MDCContext(context.jobId, context.pipelineId, context.taskId);
+        return new MDCContext(context.jobId, context.pipelineId, context.taskId, context.panguJobId);
     }
 
     public static MDCContext current() {
@@ -158,10 +195,14 @@ public class MDCContext implements Serializable, Closeable {
 
         String pipelineId = MDC.get(PIPELINE_ID);
         String taskId = MDC.get(TASK_ID);
+        String panguJobId = MDC.get(PANGU_JOB_ID);
         return new MDCContext(
                 Long.parseLong(jobId),
                 pipelineId != null ? Long.parseLong(pipelineId) : null,
-                taskId != null ? Long.parseLong(taskId) : null);
+                taskId != null ? Long.parseLong(taskId) : null,
+                panguJobId != null && !panguJobId.isEmpty()
+                        ? panguJobId
+                        : lookupPanguJobId(Long.parseLong(jobId)));
     }
 
     public static MDCContext valueOf(String s) {
@@ -173,9 +214,10 @@ public class MDCContext implements Serializable, Closeable {
         Long jobId = Long.parseLong(arr[0]);
         Long pipelineId = Long.parseLong(arr[1]);
         Long taskId = Long.parseLong(arr[2]);
+        String panguJobId = arr.length >= 4 ? arr[3] : lookupPanguJobId(jobId);
         if (pipelineId == 0 || taskId == 0) {
-            return MDCContext.of(jobId);
+            return new MDCContext(jobId, null, null, panguJobId);
         }
-        return MDCContext.of(jobId, pipelineId, taskId);
+        return new MDCContext(jobId, pipelineId, taskId, panguJobId);
     }
 }

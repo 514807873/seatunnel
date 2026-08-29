@@ -28,6 +28,7 @@ import org.apache.seatunnel.shade.org.apache.commons.lang3.StringUtils;
 import org.apache.seatunnel.api.common.metrics.MetricTags;
 import org.apache.seatunnel.api.configuration.ReadonlyConfig;
 import org.apache.seatunnel.api.options.EnvCommonOptions;
+import org.apache.seatunnel.api.tracing.MDCContext;
 import org.apache.seatunnel.api.table.catalog.TablePath;
 import org.apache.seatunnel.common.constants.PluginType;
 import org.apache.seatunnel.common.pangu.PanguStore;
@@ -860,6 +861,9 @@ public abstract class BaseService {
             throw e;
         }
         long jobId = jobImmutableInformation.getJobId();
+        if (panguJobId != null && !panguJobId.isEmpty()) {
+            MDCContext.bindPanguJobId(jobId, panguJobId);
+        }
         if (!seaTunnelServer.isMasterNode()) {
 
             NodeEngineUtil.sendOperationToMasterNode(

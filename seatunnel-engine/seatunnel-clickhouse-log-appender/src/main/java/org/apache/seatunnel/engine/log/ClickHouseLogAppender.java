@@ -42,9 +42,8 @@ import java.util.concurrent.TimeUnit;
 /**
  * log4j2 custom appender: async batch write Zeta job logs into ClickHouse {@code seatunnel_job_log}.
  *
- * <p>Job id is read from MDC {@code ST-JID} and stored in {@code flinkJobId}; {@code jobId} is left
- * empty. Only events carrying {@code ST-JID} are persisted, which filters engine noise and avoids
- * recursive logging from the ClickHouse driver.
+ * <p>MDC {@code ST-JID} (engine Long) goes to {@code flinkJobId}; MDC {@code ST-PGID} (Pangu
+ * interface id) goes to {@code jobId}. Only events carrying {@code ST-JID} are persisted.
  */
 @Plugin(
         name = "ClickHouseLog",
@@ -54,6 +53,7 @@ import java.util.concurrent.TimeUnit;
 public class ClickHouseLogAppender extends AbstractAppender {
 
     private static final String ST_JID = "ST-JID";
+    private static final String ST_PGID = "ST-PGID";
 
     private final String url;
     private final String username;
@@ -142,7 +142,8 @@ public class ClickHouseLogAppender extends AbstractAppender {
                         PreparedStatement stmt = conn.prepareStatement(sql)) {
                     for (LogEvent event : batch) {
                         String flinkJobId = event.getContextData().getValue(ST_JID);
-                        stmt.setString(1, "");
+                        String panguJobId = event.getContextData().getValue(ST_PGID);
+                        stmt.setString(1, panguJobId == null ? "" : panguJobId);
                         stmt.setString(2, flinkJobId == null ? "" : flinkJobId);
                         stmt.setString(3, event.getThreadName());
                         stmt.setTimestamp(4, new java.sql.Timestamp(event.getTimeMillis()));
