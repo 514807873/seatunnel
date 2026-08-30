@@ -70,6 +70,29 @@ public final class PanguStore {
             "UPDATE seatunnel_jobs_monitor SET read_count = IFNULL(read_count, 0) + ?, "
                     + "endTime = NOW() WHERE job_id = ? ORDER BY startTime DESC LIMIT 1";
 
+    /**
+     * history_record 只有自增 id，无业务唯一键。先按维度 UPDATE 一行，0 行再 INSERT。
+     */
+    private static final String HISTORY_RECORD_UPDATE_SQL =
+            "UPDATE seatunnel_jobs_history_record SET "
+                    + "writeCount = IFNULL(writeCount, 0) + ?, "
+                    + "insertCount = IFNULL(insertCount, 0) + ?, "
+                    + "updateCount = IFNULL(updateCount, 0) + ?, "
+                    + "deleteCount = IFNULL(deleteCount, 0) + ?, "
+                    + "keepCount = IFNULL(keepCount, 0) + ?, "
+                    + "errorCount = IFNULL(errorCount, 0) + ? "
+                    + "WHERE flinkJobId = ? "
+                    + "AND IFNULL(dataSourceId, '') = IFNULL(?, '') "
+                    + "AND IFNULL(dbSchema, '') = IFNULL(?, '') "
+                    + "AND IFNULL(tableName, '') = IFNULL(?, '') "
+                    + "ORDER BY id DESC LIMIT 1";
+
+    private static final String HISTORY_RECORD_INSERT_SQL =
+            "INSERT INTO seatunnel_jobs_history_record "
+                    + "(flinkJobId, dataSourceId, dbSchema, tableName, "
+                    + "writeCount, insertCount, updateCount, deleteCount, keepCount, errorCount) "
+                    + "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+
     private static final String LOGGER_ZETA_SUBMIT = "ZetaSubmit";
 
     private static final PanguStore INSTANCE = new PanguStore();
@@ -197,6 +220,70 @@ public final class PanguStore {
                 });
     }
 
+    public void addHistoryRecord(
+            String flinkJobId,
+            String dataSourceId,
+            String dbSchema,
+            String tableName,
+            long writeCount,
+            long insertCount,
+            long updateCount,
+            long deleteCount,
+            long keepCount,
+            long errorCount) {
+        if (!enabled
+                || isBlank(flinkJobId)
+                || isBlank(tableName)
+                || (writeCount == 0
+                        && insertCount == 0
+                        && updateCount == 0
+                        && deleteCount == 0
+                        && keepCount == 0
+                        && errorCount == 0)) {
+            return;
+        }
+        String ds = nullToEmpty(dataSourceId);
+        String schema = nullToEmpty(dbSchema);
+        executor.execute(
+                () -> {
+                    try (Connection conn = open()) {
+                        int updated =
+                                updateHistoryRecord(
+                                        conn,
+                                        flinkJobId,
+                                        ds,
+                                        schema,
+                                        tableName,
+                                        writeCount,
+                                        insertCount,
+                                        updateCount,
+                                        deleteCount,
+                                        keepCount,
+                                        errorCount);
+                        if (updated == 0) {
+                            insertHistoryRecord(
+                                    conn,
+                                    flinkJobId,
+                                    ds,
+                                    schema,
+                                    tableName,
+                                    writeCount,
+                                    insertCount,
+                                    updateCount,
+                                    deleteCount,
+                                    keepCount,
+                                    errorCount);
+                        }
+                    } catch (Exception e) {
+                        log.warn(
+                                "PanguStore add history_record failed, flinkJobId={}, table={}",
+                                flinkJobId,
+                                tableName,
+                                e);
+                    }
+                });
+    }
+
     public void addStreamRecord(
             String panguJobId,
             long writeCount,
@@ -222,6 +309,62 @@ public final class PanguStore {
                         log.warn("PanguStore add stream_record failed, jobId={}", panguJobId, e);
                     }
                 });
+    }
+
+    private int updateHistoryRecord(
+            Connection conn,
+            String flinkJobId,
+            String dataSourceId,
+            String dbSchema,
+            String tableName,
+            long writeCount,
+            long insertCount,
+            long updateCount,
+            long deleteCount,
+            long keepCount,
+            long errorCount)
+            throws SQLException {
+        try (PreparedStatement ps = conn.prepareStatement(HISTORY_RECORD_UPDATE_SQL)) {
+            ps.setLong(1, writeCount);
+            ps.setLong(2, insertCount);
+            ps.setLong(3, updateCount);
+            ps.setLong(4, deleteCount);
+            ps.setLong(5, keepCount);
+            ps.setLong(6, errorCount);
+            ps.setString(7, flinkJobId);
+            ps.setString(8, dataSourceId);
+            ps.setString(9, dbSchema);
+            ps.setString(10, tableName);
+            return ps.executeUpdate();
+        }
+    }
+
+    private void insertHistoryRecord(
+            Connection conn,
+            String flinkJobId,
+            String dataSourceId,
+            String dbSchema,
+            String tableName,
+            long writeCount,
+            long insertCount,
+            long updateCount,
+            long deleteCount,
+            long keepCount,
+            long errorCount)
+            throws SQLException {
+        try (PreparedStatement ps = conn.prepareStatement(HISTORY_RECORD_INSERT_SQL)) {
+            ps.setString(1, flinkJobId);
+            ps.setString(2, dataSourceId);
+            ps.setString(3, dbSchema);
+            ps.setString(4, tableName);
+            ps.setLong(5, writeCount);
+            ps.setLong(6, insertCount);
+            ps.setLong(7, updateCount);
+            ps.setLong(8, deleteCount);
+            ps.setLong(9, keepCount);
+            ps.setLong(10, errorCount);
+            ps.executeUpdate();
+        }
     }
 
     private void insertFailedHistory(String panguJobId, String flinkJobId) {
@@ -280,6 +423,10 @@ public final class PanguStore {
 
     private static boolean isBlank(String value) {
         return value == null || value.isEmpty();
+    }
+
+    private static String nullToEmpty(String value) {
+        return value == null ? "" : value;
     }
 
     private static void tryLoadMysqlDriver() {

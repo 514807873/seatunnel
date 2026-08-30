@@ -73,6 +73,9 @@ public class XjJdbcSinkWriter extends AbstractSinkWriter<SeaTunnelRow, Void>
     private Connection errorConn;
     private boolean truncated = false;
     private long lastMonitorInsertCount = 0L;
+    private long lastHistoryWriteCount = 0L;
+    private long lastHistoryInsertCount = 0L;
+    private long lastHistoryErrorCount = 0L;
 
     public XjJdbcSinkWriter(
             SeaTunnelRowType sourceRowType,
@@ -289,6 +292,7 @@ public class XjJdbcSinkWriter extends AbstractSinkWriter<SeaTunnelRow, Void>
     public void notifyCheckpointComplete(long checkpointId) {
         streamCounter.flush(panguJobId);
         flushJobMonitorRead();
+        flushHistoryRecord();
     }
 
     @Override
@@ -297,6 +301,7 @@ public class XjJdbcSinkWriter extends AbstractSinkWriter<SeaTunnelRow, Void>
             flush();
             streamCounter.flush(panguJobId);
             flushJobMonitorRead();
+            flushHistoryRecord();
             log.info(
                     "XjJdbc sink subtask {} finished. write={}, insert={}, error={}",
                     subtaskIndex,
@@ -317,6 +322,30 @@ public class XjJdbcSinkWriter extends AbstractSinkWriter<SeaTunnelRow, Void>
         }
         lastMonitorInsertCount = current;
         PanguStore.getInstance().addJobMonitorRead(panguJobId, delta);
+    }
+
+    private void flushHistoryRecord() {
+        long writeDelta = midCount.getWriteCount() - lastHistoryWriteCount;
+        long insertDelta = midCount.getInsertCount() - lastHistoryInsertCount;
+        long errorDelta = midCount.getErrorCount() - lastHistoryErrorCount;
+        if (writeDelta <= 0 && insertDelta <= 0 && errorDelta <= 0) {
+            return;
+        }
+        lastHistoryWriteCount = midCount.getWriteCount();
+        lastHistoryInsertCount = midCount.getInsertCount();
+        lastHistoryErrorCount = midCount.getErrorCount();
+        PanguStore.getInstance()
+                .addHistoryRecord(
+                        flinkJobId,
+                        config.getDbDatasourceId(),
+                        config.getDbSchema(),
+                        config.getTable(),
+                        writeDelta,
+                        insertDelta,
+                        0L,
+                        0L,
+                        0L,
+                        errorDelta);
     }
 
     private void closeQuietly(Connection connection) {
