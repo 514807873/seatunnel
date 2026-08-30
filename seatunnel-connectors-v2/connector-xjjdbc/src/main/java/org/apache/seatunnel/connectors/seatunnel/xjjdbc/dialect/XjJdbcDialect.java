@@ -29,8 +29,10 @@ import java.math.BigDecimal;
 import java.sql.Connection;
 import java.sql.Date;
 import java.sql.PreparedStatement;
+import java.sql.ResultSet;
 import java.sql.ResultSetMetaData;
 import java.sql.SQLException;
+import java.sql.Statement;
 import java.sql.Time;
 import java.sql.Timestamp;
 import java.sql.Types;
@@ -77,6 +79,20 @@ public interface XjJdbcDialect extends Serializable {
 
     default String truncateTable(XjJdbcSinkConfig config) {
         return "truncate table " + tableWithSchema(config);
+    }
+
+    default String countTable(XjJdbcSinkConfig config) {
+        return "select count(1) from " + tableWithSchema(config);
+    }
+
+    /** Count rows in the target table before a complete-mode truncate. */
+    default long countTableRows(Connection connection, XjJdbcSinkConfig config)
+            throws SQLException {
+        String sql = countTable(config);
+        try (Statement st = connection.createStatement();
+                ResultSet rs = st.executeQuery(sql)) {
+            return rs.next() ? rs.getLong(1) : 0L;
+        }
     }
 
     default String insertSql(XjJdbcSinkConfig config, List<ColumnMapper> columnMappers) {

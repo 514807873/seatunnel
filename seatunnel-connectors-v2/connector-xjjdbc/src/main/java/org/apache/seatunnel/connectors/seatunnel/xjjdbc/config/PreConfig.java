@@ -72,23 +72,32 @@ public class PreConfig implements Serializable {
     /**
      * Run the pre actions once on the coordinator before writers start: up front truncate (when
      * {@code cleanTableWhenCompleteNoDataIn}) or the configured {@code preSql}.
+     *
+     * @return target row count captured before truncate; {@code 0} when no truncate ran
      */
-    public void doPreConfig(Connection connection, XjJdbcDialect dialect, XjJdbcSinkConfig config)
+    public long doPreConfig(Connection connection, XjJdbcDialect dialect, XjJdbcSinkConfig config)
             throws SQLException {
         if (!isComplete()) {
-            return;
+            return 0L;
         }
         if (cleanTableWhenComplete && cleanTableWhenCompleteNoDataIn) {
+            long deleteCount = dialect.countTableRows(connection, config);
             String truncateSql = dialect.truncateTable(config);
-            log.info("XjJdbc preConfig truncate target table: {}", truncateSql);
+            log.info(
+                    "XjJdbc preConfig truncate target table: {}, deleteCount={}",
+                    truncateSql,
+                    deleteCount);
             try (Statement st = connection.createStatement()) {
                 st.execute(truncateSql);
             }
-        } else if (!cleanTableWhenComplete && StringUtils.isNotBlank(preSql)) {
+            return deleteCount;
+        }
+        if (!cleanTableWhenComplete && StringUtils.isNotBlank(preSql)) {
             log.info("XjJdbc preConfig execute preSql: {}", preSql);
             try (PreparedStatement ps = connection.prepareStatement(preSql)) {
                 ps.execute();
             }
         }
+        return 0L;
     }
 }

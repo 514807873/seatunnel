@@ -164,16 +164,41 @@ public class XjJdbcSinkWriter extends AbstractSinkWriter<SeaTunnelRow, Void>
             return;
         }
         String truncateSql = dialect.truncateTable(config);
-        log.info("XjJdbc first-row truncate target table: {}", truncateSql);
-        try (Statement st = conn.createStatement()) {
-            st.execute(truncateSql);
-            if (!dialect.useAutoCommit()) {
-                conn.commit();
+        try {
+            long deleteCount = dialect.countTableRows(conn, config);
+            log.info(
+                    "XjJdbc first-row truncate target table: {}, deleteCount={}",
+                    truncateSql,
+                    deleteCount);
+            try (Statement st = conn.createStatement()) {
+                st.execute(truncateSql);
+                if (!dialect.useAutoCommit()) {
+                    conn.commit();
+                }
             }
             truncated = true;
+            writeTruncateDeleteCount(deleteCount);
         } catch (SQLException e) {
             throw new IOException("Failed to truncate target table: " + truncateSql, e);
         }
+    }
+
+    private void writeTruncateDeleteCount(long deleteCount) {
+        if (deleteCount <= 0) {
+            return;
+        }
+        PanguStore.getInstance()
+                .addHistoryRecord(
+                        flinkJobId,
+                        config.getDbDatasourceId(),
+                        config.getDbSchema(),
+                        config.getTable(),
+                        0L,
+                        0L,
+                        0L,
+                        deleteCount,
+                        0L,
+                        0L);
     }
 
     private void flush() throws IOException {
@@ -197,6 +222,13 @@ public class XjJdbcSinkWriter extends AbstractSinkWriter<SeaTunnelRow, Void>
         } finally {
             buffer.clear();
         }
+        flushProgress();
+    }
+
+    private void flushProgress() {
+        streamCounter.flush(panguJobId);
+        flushJobMonitorRead();
+        flushHistoryRecord();
     }
 
     private void flushOneByOne() {
@@ -290,18 +322,14 @@ public class XjJdbcSinkWriter extends AbstractSinkWriter<SeaTunnelRow, Void>
 
     @Override
     public void notifyCheckpointComplete(long checkpointId) {
-        streamCounter.flush(panguJobId);
-        flushJobMonitorRead();
-        flushHistoryRecord();
+        flushProgress();
     }
 
     @Override
     public void close() throws IOException {
         try {
             flush();
-            streamCounter.flush(panguJobId);
-            flushJobMonitorRead();
-            flushHistoryRecord();
+            flushProgress();
             log.info(
                     "XjJdbc sink subtask {} finished. write={}, insert={}, error={}",
                     subtaskIndex,

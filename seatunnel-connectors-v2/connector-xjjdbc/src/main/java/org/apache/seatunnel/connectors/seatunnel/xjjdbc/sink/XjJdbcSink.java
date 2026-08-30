@@ -25,6 +25,7 @@ import org.apache.seatunnel.api.sink.SinkWriter;
 import org.apache.seatunnel.api.table.catalog.CatalogTable;
 import org.apache.seatunnel.api.table.type.SeaTunnelRow;
 import org.apache.seatunnel.api.table.type.SeaTunnelRowType;
+import org.apache.seatunnel.common.pangu.PanguStore;
 import org.apache.seatunnel.connectors.seatunnel.common.sink.AbstractSimpleSink;
 import org.apache.seatunnel.connectors.seatunnel.common.sink.AbstractSinkWriter;
 import org.apache.seatunnel.connectors.seatunnel.xjjdbc.config.XjJdbcSinkConfig;
@@ -68,11 +69,31 @@ public class XjJdbcSink extends AbstractSimpleSink<SeaTunnelRow, Void> {
         try (Connection conn = Util.getConnection(sinkConfig)) {
             conn.setAutoCommit(true);
             log.info("XjJdbc run pre config for table {}", sinkConfig.getTable());
-            sinkConfig.getPreConfig().doPreConfig(conn, dialect, sinkConfig);
+            long deleteCount = sinkConfig.getPreConfig().doPreConfig(conn, dialect, sinkConfig);
+            writeTruncateDeleteCount(deleteCount);
             preConfigDone = true;
         } catch (SQLException e) {
             throw new RuntimeException("XjJdbc pre config failed", e);
         }
+    }
+
+    private void writeTruncateDeleteCount(long deleteCount) {
+        if (deleteCount <= 0) {
+            return;
+        }
+        String flinkJobId = jobContext == null ? null : jobContext.getJobId();
+        PanguStore.getInstance()
+                .addHistoryRecord(
+                        flinkJobId,
+                        sinkConfig.getDbDatasourceId(),
+                        sinkConfig.getDbSchema(),
+                        sinkConfig.getTable(),
+                        0L,
+                        0L,
+                        0L,
+                        deleteCount,
+                        0L,
+                        0L);
     }
 
     @Override
