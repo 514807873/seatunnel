@@ -70,9 +70,7 @@ public final class PanguStore {
             "UPDATE seatunnel_jobs_monitor SET read_count = IFNULL(read_count, 0) + ?, "
                     + "endTime = NOW() WHERE job_id = ? ORDER BY startTime DESC LIMIT 1";
 
-    /**
-     * history_record 只有自增 id，无业务唯一键。先按维度 UPDATE 一行，0 行再 INSERT。
-     */
+    /** history_record 只有自增 id，无业务唯一键。先按维度 UPDATE 一行，0 行再 INSERT。 */
     private static final String HISTORY_RECORD_UPDATE_SQL =
             "UPDATE seatunnel_jobs_history_record SET "
                     + "writeCount = IFNULL(writeCount, 0) + ?, "
