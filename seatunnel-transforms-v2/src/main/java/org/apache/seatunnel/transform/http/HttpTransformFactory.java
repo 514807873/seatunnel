@@ -26,7 +26,8 @@ public class HttpTransformFactory implements TableTransformFactory {
         return OptionRule.builder()
                 .required(HttpTransformConfig.URL)
                 .optional(HttpTransformConfig.PAGES_PARAMS)
-                .optional(HttpTransformConfig.PARAMS_FIELD);
+                .optional(HttpTransformConfig.PARAMS_FIELD)
+                .optional(HttpTransformConfig.JSON_FIELD);
     }
 
     @Override

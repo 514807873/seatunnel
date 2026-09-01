@@ -31,7 +31,6 @@ import java.sql.DriverManager;
 import java.sql.PreparedStatement;
 import java.sql.SQLException;
 import java.sql.Timestamp;
-import java.util.UUID;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ThreadFactory;
@@ -57,9 +56,11 @@ public final class PanguStore {
                     + "updateCount = IFNULL(updateCount, 0) + VALUES(updateCount), "
                     + "deleteCount = IFNULL(deleteCount, 0) + VALUES(deleteCount)";
 
-    private static final String HISTORY_SQL =
-            "INSERT INTO seatunnel_jobs_history (jobId, flinkJobId, jobStatus, startTime, endTime, duration) "
-                    + "VALUES (?, ?, 'FAILED', NOW(), NOW(), 0)";
+    private static final String HISTORY_UPDATE_SQL =
+            "UPDATE seatunnel_jobs_history SET jobStatus = 'FAILED', endTime = NOW(), "
+                    + "duration = 0, exception = ? "
+                    + "WHERE jobId = ? AND jobStatus IN ('WAITING', 'INITIALIZING') "
+                    + "ORDER BY startTime DESC LIMIT 1";
 
     private static final String JOB_LOG_SQL =
             "INSERT INTO default.seatunnel_job_log "
@@ -148,24 +149,25 @@ public final class PanguStore {
     }
 
     /**
-     * Master submit parse failed. Write history row (no stack) and full stack into ClickHouse job
-     * log when {@code pangu-job-id} is present.
+     * Master submit parse failed. Update the reserved history row (do not insert a second one) and
+     * write the stack into ClickHouse job log when {@code pangu-job-id} is present.
      */
-    public void recordSubmitFailure(String panguJobId, Throwable error) {
+    public void recordSubmitFailure(String panguJobId, String engineJobId, Throwable error) {
         if (isBlank(panguJobId) || error == null) {
             return;
         }
         if (!enabled && !clickhouseEnabled) {
             return;
         }
-        String flinkJobId = UUID.randomUUID().toString().replace("-", "");
+        String flinkJobId = isBlank(engineJobId) ? "" : engineJobId;
+        String message = error.getMessage();
         String stack = stackTrace(error);
         String threadName = Thread.currentThread().getName();
         Timestamp now = new Timestamp(System.currentTimeMillis());
         executor.execute(
                 () -> {
                     if (enabled) {
-                        insertFailedHistory(panguJobId, flinkJobId);
+                        updateFailedHistory(panguJobId, message);
                     }
                     if (clickhouseEnabled) {
                         insertJobLog(panguJobId, flinkJobId, threadName, now, stack);
@@ -365,18 +367,19 @@ public final class PanguStore {
         }
     }
 
-    private void insertFailedHistory(String panguJobId, String flinkJobId) {
+    private void updateFailedHistory(String panguJobId, String exception) {
         try (Connection conn = open();
-                PreparedStatement ps = conn.prepareStatement(HISTORY_SQL)) {
-            ps.setString(1, panguJobId);
-            ps.setString(2, flinkJobId);
-            ps.executeUpdate();
+                PreparedStatement ps = conn.prepareStatement(HISTORY_UPDATE_SQL)) {
+            ps.setString(1, exception);
+            ps.setString(2, panguJobId);
+            int updated = ps.executeUpdate();
+            if (updated == 0) {
+                log.warn(
+                        "PanguStore submit failure found no WAITING/INITIALIZING history, jobId={}",
+                        panguJobId);
+            }
         } catch (Exception e) {
-            log.warn(
-                    "PanguStore insert failed history failed, jobId={}, flinkJobId={}",
-                    panguJobId,
-                    flinkJobId,
-                    e);
+            log.warn("PanguStore update failed history failed, jobId={}", panguJobId, e);
         }
     }
 

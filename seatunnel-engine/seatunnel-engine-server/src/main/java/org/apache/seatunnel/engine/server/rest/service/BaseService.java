@@ -857,7 +857,7 @@ public abstract class BaseService {
         try {
             jobImmutableInformation = restJobExecutionEnvironment.build();
         } catch (RuntimeException e) {
-            PanguStore.getInstance().recordSubmitFailure(panguJobId, e);
+            PanguStore.getInstance().recordSubmitFailure(panguJobId, jobIdStr, e);
             throw e;
         }
         long jobId = jobImmutableInformation.getJobId();
