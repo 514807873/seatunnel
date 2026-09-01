@@ -25,6 +25,7 @@ import org.apache.seatunnel.connectors.seatunnel.xjjdbc.converter.ColumnMapper;
 import org.apache.seatunnel.connectors.seatunnel.xjjdbc.util.Util;
 
 import java.io.Serializable;
+import java.io.StringReader;
 import java.math.BigDecimal;
 import java.sql.Connection;
 import java.sql.Date;
@@ -138,10 +139,8 @@ public interface XjJdbcDialect extends Serializable {
     }
 
     /**
-     * Type-aware binding: primarily driven by the runtime java type of the value (with {@code
-     * sourceSqlType} as an auxiliary hint), falling back to {@code setString} when the typed
-     * binding is rejected by the target column. The {@code sinkDbType} is available for dialect
-     * specific special handling.
+     * Bind by sink column type first (same idea as the fast job). Typed Java binding is only used
+     * when metadata did not return a type. setTimestamp on VARCHAR2 is never used.
      */
     default void bindValue(
             PreparedStatement ps, int index, Object value, SqlType sourceSqlType, String sinkDbType)
@@ -151,37 +150,88 @@ public interface XjJdbcDialect extends Serializable {
             return;
         }
         try {
-            if (value instanceof Integer) {
-                ps.setInt(index, (Integer) value);
-            } else if (value instanceof Short) {
-                ps.setShort(index, (Short) value);
-            } else if (value instanceof Byte) {
-                ps.setByte(index, (Byte) value);
-            } else if (value instanceof Long) {
-                ps.setLong(index, (Long) value);
-            } else if (value instanceof BigDecimal) {
-                ps.setBigDecimal(index, (BigDecimal) value);
-            } else if (value instanceof Double) {
-                ps.setDouble(index, (Double) value);
-            } else if (value instanceof Float) {
-                ps.setFloat(index, (Float) value);
-            } else if (value instanceof Boolean) {
-                ps.setBoolean(index, (Boolean) value);
-            } else if (value instanceof LocalDate) {
-                ps.setDate(index, Date.valueOf((LocalDate) value));
-            } else if (value instanceof LocalDateTime) {
-                ps.setTimestamp(index, Timestamp.valueOf((LocalDateTime) value));
-            } else if (value instanceof LocalTime) {
-                ps.setTime(index, Time.valueOf((LocalTime) value));
-            } else if (value instanceof byte[]) {
-                ps.setBytes(index, (byte[]) value);
-            } else if (value instanceof String) {
-                ps.setString(index, (String) value);
-            } else {
-                ps.setObject(index, value);
+            String kind = Util.sinkKind(sinkDbType);
+            if (Util.SINK_STRING.equals(kind)) {
+                bindString(ps, index, value);
+                return;
             }
+            if (Util.SINK_DATE.equals(kind)) {
+                if (value instanceof LocalDateTime || value instanceof Timestamp) {
+                    ps.setTimestamp(index, Util.toTimestamp(value));
+                } else {
+                    ps.setDate(index, Util.toSqlDate(value));
+                }
+                return;
+            }
+            if (Util.SINK_TIMESTAMP.equals(kind)) {
+                ps.setTimestamp(index, Util.toTimestamp(value));
+                return;
+            }
+            if (Util.SINK_TIME.equals(kind)) {
+                ps.setTime(index, Util.toSqlTime(value));
+                return;
+            }
+            if (Util.SINK_NUMBER.equals(kind)) {
+                ps.setBigDecimal(index, Util.toBigDecimal(value));
+                return;
+            }
+            if (Util.SINK_BOOLEAN.equals(kind)) {
+                boolean flag =
+                        value instanceof Boolean
+                                ? (Boolean) value
+                                : Boolean.parseBoolean(Util.object2String(value));
+                ps.setBoolean(index, flag);
+                return;
+            }
+            if (Util.SINK_BINARY.equals(kind)) {
+                ps.setBytes(index, Util.toBytes(value));
+                return;
+            }
+            bindByJavaType(ps, index, value);
         } catch (SQLException e) {
             ps.setString(index, Util.object2String(value));
+        }
+    }
+
+    default void bindString(PreparedStatement ps, int index, Object value) throws SQLException {
+        String text = Util.object2String(value);
+        if (text != null && text.length() > 32767) {
+            ps.setCharacterStream(index, new StringReader(text), text.length());
+            return;
+        }
+        ps.setString(index, text);
+    }
+
+    default void bindByJavaType(PreparedStatement ps, int index, Object value)
+            throws SQLException {
+        if (value instanceof Integer) {
+            ps.setInt(index, (Integer) value);
+        } else if (value instanceof Short) {
+            ps.setShort(index, (Short) value);
+        } else if (value instanceof Byte) {
+            ps.setByte(index, (Byte) value);
+        } else if (value instanceof Long) {
+            ps.setLong(index, (Long) value);
+        } else if (value instanceof BigDecimal) {
+            ps.setBigDecimal(index, (BigDecimal) value);
+        } else if (value instanceof Double) {
+            ps.setDouble(index, (Double) value);
+        } else if (value instanceof Float) {
+            ps.setFloat(index, (Float) value);
+        } else if (value instanceof Boolean) {
+            ps.setBoolean(index, (Boolean) value);
+        } else if (value instanceof LocalDate) {
+            ps.setDate(index, Date.valueOf((LocalDate) value));
+        } else if (value instanceof LocalDateTime) {
+            ps.setTimestamp(index, Timestamp.valueOf((LocalDateTime) value));
+        } else if (value instanceof LocalTime) {
+            ps.setTime(index, Time.valueOf((LocalTime) value));
+        } else if (value instanceof byte[]) {
+            ps.setBytes(index, (byte[]) value);
+        } else if (value instanceof String) {
+            ps.setString(index, (String) value);
+        } else {
+            ps.setObject(index, value);
         }
     }
 }

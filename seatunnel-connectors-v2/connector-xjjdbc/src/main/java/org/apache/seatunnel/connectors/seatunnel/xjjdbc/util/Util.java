@@ -24,12 +24,15 @@ import org.apache.seatunnel.connectors.seatunnel.xjjdbc.config.XjJdbcSinkConfig;
 import java.math.BigDecimal;
 import java.net.URL;
 import java.net.URLClassLoader;
+import java.nio.charset.StandardCharsets;
 import java.sql.Connection;
 import java.sql.Driver;
 import java.sql.DriverManager;
 import java.sql.SQLException;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.LocalTime;
+import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.Base64;
 import java.util.Enumeration;
@@ -41,6 +44,16 @@ public final class Util {
     private static final DateTimeFormatter DATE_FMT = DateTimeFormatter.ofPattern("yyyy-MM-dd");
     private static final DateTimeFormatter DATETIME_FMT =
             DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
+    private static final DateTimeFormatter TIME_FMT = DateTimeFormatter.ofPattern("HH:mm:ss");
+
+    public static final String SINK_STRING = "string";
+    public static final String SINK_DATE = "date";
+    public static final String SINK_TIMESTAMP = "timestamp";
+    public static final String SINK_TIME = "time";
+    public static final String SINK_NUMBER = "number";
+    public static final String SINK_BOOLEAN = "boolean";
+    public static final String SINK_BINARY = "binary";
+    public static final String SINK_UNKNOWN = "unknown";
 
     private Util() {}
 
@@ -133,25 +146,177 @@ public final class Util {
         }
     }
 
-    /** Fallback conversion used when a typed PreparedStatement binding is not accepted. */
+    /**
+     * Classify a JDBC type name from sink metadata. Binary is checked before string so LONG RAW
+     * does not fall into LONG.
+     */
+    public static String sinkKind(String sinkDbType) {
+        if (StringUtils.isBlank(sinkDbType)) {
+            return SINK_UNKNOWN;
+        }
+        String t = sinkDbType.toLowerCase();
+        if (t.contains("blob")
+                || t.contains("raw")
+                || t.contains("binary")
+                || t.contains("bytea")) {
+            return SINK_BINARY;
+        }
+        if (t.contains("clob")
+                || t.contains("text")
+                || t.contains("varchar")
+                || t.contains("char")
+                || t.equals("long")
+                || t.contains("string")) {
+            return SINK_STRING;
+        }
+        if (t.contains("timestamp") || t.contains("datetime")) {
+            return SINK_TIMESTAMP;
+        }
+        if (t.contains("date") && !t.contains("time")) {
+            return SINK_DATE;
+        }
+        if (t.contains("time") && !t.contains("date") && !t.contains("stamp")) {
+            return SINK_TIME;
+        }
+        if (t.contains("int")
+                || t.contains("number")
+                || t.contains("numeric")
+                || t.contains("decimal")
+                || t.contains("float")
+                || t.contains("double")
+                || t.contains("real")
+                || t.contains("money")
+                || t.contains("serial")) {
+            return SINK_NUMBER;
+        }
+        if (t.contains("bool") || t.equals("bit")) {
+            return SINK_BOOLEAN;
+        }
+        return SINK_UNKNOWN;
+    }
+
+    /** Same date/number rules as the fast job Object2String. */
     public static String object2String(Object value) {
         if (value == null) {
             return null;
         }
-        if (value instanceof java.util.Date) {
-            return DATETIME_FMT.format(((java.util.Date) value).toInstant());
+        if (value instanceof java.sql.Time) {
+            return TIME_FMT.format(((java.sql.Time) value).toLocalTime());
+        }
+        if (value instanceof java.sql.Date) {
+            return DATE_FMT.format(((java.sql.Date) value).toLocalDate());
+        }
+        if (value instanceof java.sql.Timestamp) {
+            return DATETIME_FMT.format(((java.sql.Timestamp) value).toLocalDateTime());
+        }
+        if (value.getClass().getName().toLowerCase().contains("timestamp")) {
+            return formatOracleTimestamp(value);
+        }
+        if (value instanceof LocalTime) {
+            return TIME_FMT.format((LocalTime) value);
         }
         if (value instanceof LocalDate) {
-            return ((LocalDate) value).format(DATE_FMT);
+            return DATE_FMT.format((LocalDate) value);
         }
         if (value instanceof LocalDateTime) {
             return DATETIME_FMT.format((LocalDateTime) value);
+        }
+        if (value instanceof java.util.Date) {
+            return DATETIME_FMT.format(
+                    ((java.util.Date) value)
+                            .toInstant()
+                            .atZone(ZoneId.systemDefault())
+                            .toLocalDateTime());
         }
         if (value instanceof BigDecimal) {
             return ((BigDecimal) value).stripTrailingZeros().toPlainString();
         }
         if (value instanceof byte[]) {
             return Base64.getEncoder().encodeToString((byte[]) value);
+        }
+        return String.valueOf(value);
+    }
+
+    public static java.sql.Timestamp toTimestamp(Object value) {
+        if (value instanceof java.sql.Timestamp) {
+            return (java.sql.Timestamp) value;
+        }
+        if (value instanceof LocalDateTime) {
+            return java.sql.Timestamp.valueOf((LocalDateTime) value);
+        }
+        if (value instanceof LocalDate) {
+            return java.sql.Timestamp.valueOf(((LocalDate) value).atStartOfDay());
+        }
+        if (value instanceof java.sql.Date) {
+            return new java.sql.Timestamp(((java.sql.Date) value).getTime());
+        }
+        if (value instanceof java.util.Date) {
+            return new java.sql.Timestamp(((java.util.Date) value).getTime());
+        }
+        String text = object2String(value);
+        if (text.length() <= 10) {
+            return java.sql.Timestamp.valueOf(LocalDate.parse(text, DATE_FMT).atStartOfDay());
+        }
+        return java.sql.Timestamp.valueOf(LocalDateTime.parse(text, DATETIME_FMT));
+    }
+
+    public static java.sql.Date toSqlDate(Object value) {
+        if (value instanceof java.sql.Date) {
+            return (java.sql.Date) value;
+        }
+        if (value instanceof LocalDate) {
+            return java.sql.Date.valueOf((LocalDate) value);
+        }
+        if (value instanceof LocalDateTime) {
+            return java.sql.Date.valueOf(((LocalDateTime) value).toLocalDate());
+        }
+        if (value instanceof java.util.Date) {
+            return new java.sql.Date(((java.util.Date) value).getTime());
+        }
+        return java.sql.Date.valueOf(LocalDate.parse(object2String(value).substring(0, 10), DATE_FMT));
+    }
+
+    public static java.sql.Time toSqlTime(Object value) {
+        if (value instanceof java.sql.Time) {
+            return (java.sql.Time) value;
+        }
+        if (value instanceof LocalTime) {
+            return java.sql.Time.valueOf((LocalTime) value);
+        }
+        if (value instanceof LocalDateTime) {
+            return java.sql.Time.valueOf(((LocalDateTime) value).toLocalTime());
+        }
+        return java.sql.Time.valueOf(LocalTime.parse(object2String(value), TIME_FMT));
+    }
+
+    public static byte[] toBytes(Object value) {
+        if (value instanceof byte[]) {
+            return (byte[]) value;
+        }
+        if (value instanceof String) {
+            return ((String) value).getBytes(StandardCharsets.UTF_8);
+        }
+        return object2String(value).getBytes(StandardCharsets.UTF_8);
+    }
+
+    public static BigDecimal toBigDecimal(Object value) {
+        if (value instanceof BigDecimal) {
+            return (BigDecimal) value;
+        }
+        if (value instanceof Number) {
+            return new BigDecimal(value.toString());
+        }
+        return new BigDecimal(object2String(value));
+    }
+
+    private static String formatOracleTimestamp(Object value) {
+        try {
+            Object ts = value.getClass().getMethod("timestampValue").invoke(value);
+            if (ts instanceof java.sql.Timestamp) {
+                return DATETIME_FMT.format(((java.sql.Timestamp) ts).toLocalDateTime());
+            }
+        } catch (Exception ignored) {
+            // fall through
         }
         return String.valueOf(value);
     }
