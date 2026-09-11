@@ -27,10 +27,13 @@ import org.apache.logging.log4j.core.config.plugins.Plugin;
 import org.apache.logging.log4j.core.config.plugins.PluginAttribute;
 import org.apache.logging.log4j.core.config.plugins.PluginElement;
 import org.apache.logging.log4j.core.config.plugins.PluginFactory;
+import org.apache.logging.log4j.core.impl.ThrowableProxy;
 
 import com.clickhouse.jdbc.ClickHouseDataSource;
 
+import java.io.PrintWriter;
 import java.io.Serializable;
+import java.io.StringWriter;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.util.ArrayList;
@@ -151,11 +154,7 @@ public class ClickHouseLogAppender extends AbstractAppender {
                         stmt.setTimestamp(4, new java.sql.Timestamp(event.getTimeMillis()));
                         stmt.setString(5, event.getLoggerName());
                         stmt.setString(6, event.getLevel().toString());
-                        stmt.setString(
-                                7,
-                                event.getMessage() == null
-                                        ? ""
-                                        : event.getMessage().getFormattedMessage());
+                        stmt.setString(7, formatMessage(event));
                         stmt.addBatch();
                     }
                     stmt.executeBatch();
@@ -216,5 +215,39 @@ public class ClickHouseLogAppender extends AbstractAppender {
                 table,
                 batchSize,
                 batchTimeoutMs);
+    }
+
+    /**
+     * Log4j2 的 formatted message 不含 thrown；文件日志靠 PatternLayout 的 %ex 打堆栈，这里必须手动拼进去，否则中台 CK 日志只剩一句
+     * "report error from task"。
+     */
+    static String formatMessage(LogEvent event) {
+        String message = event.getMessage() == null ? "" : event.getMessage().getFormattedMessage();
+        if (message == null) {
+            message = "";
+        }
+        String stack = thrownStack(event);
+        if (stack.isEmpty()) {
+            return message;
+        }
+        if (message.isEmpty()) {
+            return stack;
+        }
+        return message + System.lineSeparator() + stack;
+    }
+
+    private static String thrownStack(LogEvent event) {
+        ThrowableProxy proxy = event.getThrownProxy();
+        if (proxy != null) {
+            String stack = proxy.getExtendedStackTraceAsString();
+            return stack == null ? "" : stack;
+        }
+        Throwable thrown = event.getThrown();
+        if (thrown == null) {
+            return "";
+        }
+        StringWriter writer = new StringWriter();
+        thrown.printStackTrace(new PrintWriter(writer));
+        return writer.toString();
     }
 }
