@@ -126,13 +126,30 @@ public class Util {
                 return driver;
             }
         }
-        Class<?> clazz =
-                Class.forName(driverName, true, Thread.currentThread().getContextClassLoader());
-        try {
-            return (Driver) clazz.getDeclaredConstructor().newInstance();
-        } catch (Exception ex) {
-            throw new RuntimeException("Fail to create driver of class " + driverName, ex);
+        ClassNotFoundException lastNotFound = null;
+        ClassLoader[] loaders =
+                new ClassLoader[] {
+                    Thread.currentThread().getContextClassLoader(),
+                    Util.class.getClassLoader(),
+                    ClassLoader.getSystemClassLoader()
+                };
+        for (ClassLoader loader : loaders) {
+            if (loader == null) {
+                continue;
+            }
+            try {
+                Class<?> clazz = Class.forName(driverName, true, loader);
+                return (Driver) clazz.getDeclaredConstructor().newInstance();
+            } catch (ClassNotFoundException ex) {
+                lastNotFound = ex;
+            } catch (Exception ex) {
+                throw new RuntimeException("Fail to create driver of class " + driverName, ex);
+            }
         }
+        if (lastNotFound != null) {
+            throw lastNotFound;
+        }
+        throw new ClassNotFoundException(driverName);
     }
 
     public void sendPostRequest(String url, String data) throws Exception {
@@ -160,15 +177,31 @@ public class Util {
     }
 
     public Connection getConnection(SqlCdcConfig jdbcConfig) {
-        try {
-            Driver dri = this.loadDriver(jdbcConfig.getDriver());
-            Properties info = new Properties();
-            info.setProperty("user", jdbcConfig.getUser());
-            info.setProperty("password", jdbcConfig.getPassWord());
+        return getConnection(
+                jdbcConfig.getDriver(),
+                jdbcConfig.getUrl(),
+                jdbcConfig.getUser(),
+                jdbcConfig.getPassWord());
+    }
 
-            Connection conn = dri.connect(jdbcConfig.getUrl(), info);
+    public Connection getConnection(DirectSinkConfig sinkConfig) {
+        return getConnection(
+                sinkConfig.getDriver(),
+                sinkConfig.getUrl(),
+                sinkConfig.getUser(),
+                sinkConfig.getPassword());
+    }
+
+    public Connection getConnection(String driver, String url, String user, String password) {
+        try {
+            Driver dri = this.loadDriver(driver);
+            Properties info = new Properties();
+            info.setProperty("user", user);
+            info.setProperty("password", password);
+
+            Connection conn = dri.connect(url, info);
             if (conn == null) {
-                throw new RuntimeException("No suitable driver found for " + jdbcConfig.getUrl());
+                throw new RuntimeException("No suitable driver found for " + url);
             }
             return conn;
         } catch (ClassNotFoundException | SQLException e) {

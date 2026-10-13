@@ -62,6 +62,7 @@ public class SqlCdcSource extends AbstractSingleSplitSource<SeaTunnelRow>
     private SqlCdcConfig sqlCdcConfig;
     private JobContext jobContext;
     private JdbcDialect jdbcDialect;
+    private SeaTunnelRowType producedType;
 
     @Override
     public String getPluginName() {
@@ -107,7 +108,9 @@ public class SqlCdcSource extends AbstractSingleSplitSource<SeaTunnelRow>
 
         // 2. 构建主键（如果配置了）
         PrimaryKey primaryKey = null;
-        if (sqlCdcConfig.getPrimaryKeys() != null && !sqlCdcConfig.getPrimaryKeys().isEmpty()) {
+        if (sqlCdcConfig != null
+                && sqlCdcConfig.getPrimaryKeys() != null
+                && !sqlCdcConfig.getPrimaryKeys().isEmpty()) {
             primaryKey =
                     PrimaryKey.of(
                             "pk_" + sqlCdcConfig.getPrimaryKeys(), sqlCdcConfig.getPrimaryKeys());
@@ -128,13 +131,18 @@ public class SqlCdcSource extends AbstractSingleSplitSource<SeaTunnelRow>
         return Collections.singletonList(catalogTable);
     }
 
+    /** 探表只在无缓存时连源库。REST 列表线程的 TCCL 往往没有 JDBC 驱动， 失败时返回空 schema，避免 /running-jobs 整页 500。 */
     private SeaTunnelRowType initTableField() {
-        Util util = new Util();
-        Connection conn = util.getConnection(this.sqlCdcConfig);
+        if (producedType != null && producedType.getTotalFields() > 0) {
+            return producedType;
+        }
         ArrayList<SeaTunnelDataType<?>> seaTunnelDataTypes = new ArrayList<>();
         ArrayList<String> fieldNames = new ArrayList<>();
-        try {
-            PreparedStatement ps = conn.prepareStatement(sqlCdcConfig.getQuery());
+        if (sqlCdcConfig == null || jdbcDialect == null) {
+            return emptyRowType();
+        }
+        try (Connection conn = new Util().getConnection(this.sqlCdcConfig);
+                PreparedStatement ps = conn.prepareStatement(sqlCdcConfig.getQuery())) {
             ps.executeQuery();
             ResultSetMetaData resultSetMetaData = ps.getMetaData();
             JdbcDialectTypeMapper jdbcDialectTypeMapper = jdbcDialect.getJdbcDialectTypeMapper();
@@ -142,14 +150,19 @@ public class SqlCdcSource extends AbstractSingleSplitSource<SeaTunnelRow>
                 fieldNames.add(resultSetMetaData.getColumnLabel(i));
                 seaTunnelDataTypes.add(jdbcDialectTypeMapper.mapping(resultSetMetaData, i));
             }
-            ps.close();
-            conn.close();
+            producedType =
+                    new SeaTunnelRowType(
+                            fieldNames.toArray(new String[0]),
+                            seaTunnelDataTypes.toArray(new SeaTunnelDataType<?>[0]));
+            return producedType;
         } catch (Exception e) {
             log.warn("get row type info exception", e);
+            return emptyRowType();
         }
-        return new SeaTunnelRowType(
-                fieldNames.toArray(new String[0]),
-                seaTunnelDataTypes.toArray(new SeaTunnelDataType<?>[0]));
+    }
+
+    private SeaTunnelRowType emptyRowType() {
+        return new SeaTunnelRowType(new String[0], new SeaTunnelDataType<?>[0]);
     }
 
     @Override
