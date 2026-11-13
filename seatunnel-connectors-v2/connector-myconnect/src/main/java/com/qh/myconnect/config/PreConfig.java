@@ -67,6 +67,15 @@ public class PreConfig implements Serializable {
     @OptionMark(description = "自动时间戳字段名")
     private String autoTimestampColumnName;
 
+    /** 本次收尾探测通过后才写时间戳 */
+    private boolean autoTimestampReady = false;
+
+    /** 自动时间戳就绪且操作列也存在时才写操作类型 */
+    private boolean recordOperateReady = false;
+
+    /** 按列类型拼好的时间字面量，整次收尾共用 */
+    private String autoTimestampLiteral;
+
 
     @OptionMark(description = "记录操作类型")
     private boolean recordOperate = false;

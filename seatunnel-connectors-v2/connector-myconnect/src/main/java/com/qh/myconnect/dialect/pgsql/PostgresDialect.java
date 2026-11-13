@@ -295,9 +295,7 @@ public class PostgresDialect implements JdbcDialect {
         String deleteFlagValue = preConfig.getZipperFlagValue().get(2);
         String operateColumnName = preConfig.getRecordOperateColumnName();
         String timestampColumnName = preConfig.getAutoTimestampColumnName();
-        LocalDateTime now = LocalDateTime.now();
-        DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
-        String timestampValue = now.format(formatter);
+        String timestampLiteral = preConfig.getAutoTimestampLiteral();
         String jsonString = JSON.toJSONString(ucColumns);
         List<ColumnMapper> newColumnMappers = JSON.parseArray(jsonString, ColumnMapper.class);
         newColumnMappers.forEach(
@@ -306,7 +304,7 @@ public class PostgresDialect implements JdbcDialect {
                 });
         String delSql =
                 "update  <table> a   "
-                + " set a.<operateColumnName> = '" + deleteFlagValue + "', a.<timestampColumnName> = '<timestampValue>' "
+                + " set a.<operateColumnName> = '" + deleteFlagValue + "', a.<timestampColumnName> = <timestampLiteral> "
                 + " where not exists "
                 + "       (select  <pks:{pk | <pk.sinkColumnName>}; separator=\" , \"> from <tmpTable> b where <pks:{pk | a.<pk.sinkColumnName>=b.<pk.sinkColumnName> }; separator=\" and \">  ) "
                 + " and <operateColumnName> !='" + deleteFlagValue + "'";
@@ -316,7 +314,7 @@ public class PostgresDialect implements JdbcDialect {
         template.add("pks", newColumnMappers);
         template.add("operateColumnName", operateColumnName);
         template.add("timestampColumnName", timestampColumnName);
-        template.add("timestampValue", timestampValue);
+        template.add("timestampLiteral", timestampLiteral);
         PreparedStatement preparedStatement = null;
         int del = 0;
         try {

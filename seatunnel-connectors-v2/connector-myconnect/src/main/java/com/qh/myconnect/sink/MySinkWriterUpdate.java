@@ -36,6 +36,7 @@ import java.sql.ResultSetMetaData;
 import java.sql.SQLException;
 import java.sql.Statement;
 import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -243,6 +244,7 @@ public class MySinkWriterUpdate extends AbstractSinkWriter<SeaTunnelRow, Void> {
             int done = (int) subTaskStatus1.stream().filter(x -> !x.getStatus().equalsIgnoreCase("done")).count();
             log.info("subTaskStatus:" + done);
             if (done == 0) {
+                prepareAutoTimestamp(conn);
                 List<ColumnMapper> ucColumns =
                         this.columnMappers.stream()
                                 .filter(ColumnMapper::isUc)
@@ -277,10 +279,8 @@ public class MySinkWriterUpdate extends AbstractSinkWriter<SeaTunnelRow, Void> {
                         }
                         midCount.setDeleteCount(del + midCount.getDeleteCount());
                     }
-                    else {
-                        if (preConfig.isAutoTimestamp() && preConfig.isRecordOperate()) {
-
-                            //处理原来删除又被插回来的数据
+                    else if (!preConfig.isDontCompare() && preConfig.isAutoTimestampReady()) {
+                        if (preConfig.isRecordOperateReady()) {
                             jdbcDialect.deleteReInsertData(conn, table, tmpTable, ucColumns, jdbcSinkConfig);
                             long del = 0;
                             if (StringUtils.isNoneBlank(this.jdbcSinkConfig.getDbSchema())) {
@@ -311,6 +311,16 @@ public class MySinkWriterUpdate extends AbstractSinkWriter<SeaTunnelRow, Void> {
                             }
                             midCount.setDeleteCount(del + midCount.getDeleteCount());
                         }
+                        else {
+                            String targetName = StringUtils.isNoneBlank(this.jdbcSinkConfig.getDbSchema())
+                                    ? this.jdbcSinkConfig.getDbSchema() + "." + table : table;
+                            String tempName = StringUtils.isNoneBlank(this.jdbcSinkConfig.getDbSchema())
+                                    ? this.jdbcSinkConfig.getDbSchema() + "." + tmpTable : tmpTable;
+                            this.jdbcDialect.updateMissingAutoTimestamp(conn, targetName, tempName, ucColumns, this.preConfig);
+                            if (!(jdbcDialect instanceof ClickHouseDialect)) {
+                                conn.commit();
+                            }
+                        }
                     }
                     if (!(jdbcDialect instanceof ClickHouseDialect)) {
                         conn.commit();
@@ -319,6 +329,9 @@ public class MySinkWriterUpdate extends AbstractSinkWriter<SeaTunnelRow, Void> {
                 log.info("删除数据处理完毕");
                 //开启不对比数据的 直接覆盖插入数据
                 if (preConfig.isDontCompare()) {
+                    List<String> pkNames = ucColumns.stream().map(ColumnMapper::getSinkColumnName).collect(Collectors.toList());
+                    midCount.setUpdateCount(this.jdbcDialect.countTempRows(conn, jdbcSinkConfig, tmpTable, pkNames, true));
+                    midCount.setInsertCount(this.jdbcDialect.countTempRows(conn, jdbcSinkConfig, tmpTable, pkNames, false));
                     if (StringUtils.isNoneBlank(this.jdbcSinkConfig.getDbSchema())) {
                         this.jdbcDialect.deleteDataInUc(
                                 conn,
@@ -342,11 +355,14 @@ public class MySinkWriterUpdate extends AbstractSinkWriter<SeaTunnelRow, Void> {
                     List<String> columns = this.columnMappers.stream().map(ColumnMapper::getSinkColumnName).collect(Collectors.toList());
                     List<String> ucs =
                             columnMappers.stream().filter(ColumnMapper::isUc).map(ColumnMapper::getSinkColumnName).collect(Collectors.toList());
+                    if (!preConfig.isDontCompare()) {
                     String insertSqlCount =
                             this.jdbcDialect.insertDataCount(jdbcSinkConfig, tmpTable, ucs);
                     ResultSet resultSet = conn.createStatement().executeQuery(insertSqlCount);
                     resultSet.next();
                     midCount.setInsertCount(resultSet.getLong(1));
+                        resultSet.close();
+                    }
                     String insertSql = this.jdbcDialect.insertData(jdbcSinkConfig, tmpTable, columns, ucs);
                     log.info("插入数据执行的sql：" + insertSql);
                     conn.createStatement().execute(insertSql);
@@ -526,6 +542,42 @@ public class MySinkWriterUpdate extends AbstractSinkWriter<SeaTunnelRow, Void> {
         });
     }
 
+    private void prepareAutoTimestamp(Connection conn) throws SQLException {
+        preConfig.setAutoTimestampReady(false);
+        preConfig.setRecordOperateReady(false);
+        preConfig.setAutoTimestampLiteral(null);
+        if (!preConfig.isAutoTimestamp()) {
+            return;
+        }
+        String columnName = preConfig.getAutoTimestampColumnName();
+        if (StringUtils.isBlank(columnName)) {
+            log.warn("自动更新时间戳已跳过：未配置时间戳字段");
+            return;
+        }
+        String columnType = jdbcDialect.probeColumnType(conn, jdbcSinkConfig, columnName);
+        if (columnType == null) {
+            log.warn("自动更新时间戳已跳过：目标表不存在字段 {}", columnName);
+            return;
+        }
+        String formattedTime = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"));
+        preConfig.setAutoTimestampLiteral(jdbcDialect.buildAutoTimestampLiteral(columnType, formattedTime));
+        preConfig.setAutoTimestampReady(true);
+        if (!preConfig.isRecordOperate()) {
+            return;
+        }
+        String operateColumn = preConfig.getRecordOperateColumnName();
+        if (StringUtils.isBlank(operateColumn)) {
+            log.warn("记录操作类型已跳过：未配置操作类型字段，将仅更新时间戳");
+            return;
+        }
+        String operateType = jdbcDialect.probeColumnType(conn, jdbcSinkConfig, operateColumn);
+        if (operateType == null) {
+            log.warn("记录操作类型已跳过：目标表不存在字段 {}，将仅更新时间戳", operateColumn);
+            return;
+        }
+        preConfig.setRecordOperateReady(true);
+    }
+
     private void compareTables(String tableName) throws SQLException {
         int indexOfSubtask = context.getIndexOfSubtask();
         log.info("subtask:{} compare table:{}", indexOfSubtask, tableName);
@@ -582,9 +634,12 @@ public class MySinkWriterUpdate extends AbstractSinkWriter<SeaTunnelRow, Void> {
                                     if (!ignoreColumns.contains(md1.getColumnName(i))) {
                                         String updateSql = jdbcDialect.updateTableSql(jdbcSinkConfig, md1.getColumnName(i), ucColumns);
                                         PreparedStatement preparedStatement = conn.prepareStatement(updateSql);
-                                        preparedStatement.setObject(1, rs1.getObject(md1.getColumnName(i)));
+                                        int paramIndex = 1;
+                                        if (jdbcDialect.bindsValueParameter(jdbcSinkConfig, md1.getColumnName(i))) {
+                                            preparedStatement.setObject(paramIndex++, rs1.getObject(md1.getColumnName(i)));
+                                        }
                                         for (int j = 0; j < ucColumns.size(); j++) {
-                                            preparedStatement.setObject(j + 2, rs2.getObject(ucColumns.get(j)));
+                                            preparedStatement.setObject(paramIndex++, rs2.getObject(ucColumns.get(j)));
                                         }
                                         preparedStatement.executeUpdate();
                                         preparedStatement.close();

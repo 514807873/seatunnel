@@ -339,12 +339,10 @@ public class OracleDialect implements JdbcDialect {
         String deleteFlagValue = preConfig.getZipperFlagValue().get(2);
         String operateColumnName = preConfig.getRecordOperateColumnName();
         String timestampColumnName = preConfig.getAutoTimestampColumnName();
-        LocalDateTime now = LocalDateTime.now();
-        DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
-        String timestampValue = now.format(formatter);
+        String timestampLiteral = preConfig.getAutoTimestampLiteral();
         String delSql =
                 "update  <table> a   "
-                + " set  <operateColumnName> = '" + deleteFlagValue + "' , <timestampColumnName> = '<timestampValue>' "
+                + " set  <operateColumnName> = '" + deleteFlagValue + "' , <timestampColumnName> = <timestampLiteral> "
                 + " where not exists "
                 + "       (select  <pks:{pk | <pk.sinkColumnName>}; separator=\" , \"> from <tmpTable> b where <pks:{pk | a.<pk.sinkColumnName>=b.<pk.sinkColumnName> }; separator=\" and \">  ) "
                 + " and <operateColumnName> !='" + deleteFlagValue + "'";
@@ -354,7 +352,7 @@ public class OracleDialect implements JdbcDialect {
         template.add("pks", ucColumns);
         template.add("operateColumnName", operateColumnName);
         template.add("timestampColumnName", timestampColumnName);
-        template.add("timestampValue", timestampValue);
+        template.add("timestampLiteral", timestampLiteral);
         PreparedStatement preparedStatement = null;
         int del = 0;
         try {

@@ -1,0 +1,29 @@
+{
+  "env": {
+    "job.mode": "BATCH",
+    "isRecordErrorData": 0,
+    "execution.parallelism": 1,
+    "maxRecordNumber": 0,
+    "job.name": "groovy-console-demo"
+  },
+  "source": [
+    {
+      "plugin_name": "Groovy",
+      "result_table_name": "groovy_out",
+      "code": "class Demo {\n  List items\n  int index = 0\n\n  void open() {\n    items = [\n      [name: 'zhang', age: 18],\n      [name: 'li', age: 20],\n      [name: 'wang', age: 22]\n    ]\n  }\n\n  boolean pollNext(output) {\n    if (index >= items.size()) {\n      return false\n    }\n    output.collect(items[index++])\n    return true\n  }\n}\n",
+      "schema": {
+        "fields": {
+          "name": "string",
+          "age": "int"
+        }
+      }
+    }
+  ],
+  "transform": [],
+  "sink": [
+    {
+      "plugin_name": "Console",
+      "source_table_name": "groovy_out"
+    }
+  ]
+}

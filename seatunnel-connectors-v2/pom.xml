@@ -76,6 +76,7 @@
 <!--        <module>connector-paimon</module>-->
 <!--        <module>connector-easysearch</module>-->
         <module>connector-myconnect</module>
+        <module>connector-groovy</module>
         <module>connector-sqlcdc</module>
     </modules>
 

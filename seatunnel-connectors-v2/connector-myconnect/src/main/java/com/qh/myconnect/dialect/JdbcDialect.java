@@ -26,10 +26,12 @@ import com.qh.myconnect.config.SeaTunnelJobsHistoryErrorRecord;
 import com.qh.myconnect.config.Util;
 import com.qh.myconnect.dialect.ClickHouse.ClickHouseDialect;
 import com.qh.myconnect.dialect.dameng.DaMengDialect;
+import com.qh.myconnect.dialect.hexadb.HexadbDialect;
+import com.qh.myconnect.dialect.mysql.MysqlDialect;
 import com.qh.myconnect.dialect.oracle.OracleDialect;
 import com.qh.myconnect.dialect.pgsql.PostgresDialect;
-
 import com.qh.myconnect.dialect.sqlserver.SqlServerDialect;
+import com.qh.myconnect.dialect.trino.TrinoDialect;
 import org.apache.commons.lang3.StringUtils;
 
 import org.apache.commons.lang3.exception.ExceptionUtils;
@@ -255,34 +257,24 @@ public interface JdbcDialect extends Serializable {
     }
 
     default String updateTableSql(JdbcSinkConfig jdbcSinkConfig, String columnName, List<String> ucColumns) {
-        String operateColumnName = jdbcSinkConfig.getPreConfig().getRecordOperateColumnName();
-        String timestampColumnName = jdbcSinkConfig.getPreConfig().getAutoTimestampColumnName();
-        LocalDateTime now = LocalDateTime.now();
-        DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
-        String timestampValue = now.format(formatter);
-        String tmpSql = "";
-        if (!jdbcSinkConfig.getPreConfig().isOpenDelete()
-            && jdbcSinkConfig.getPreConfig().isRecordOperate()
-            && jdbcSinkConfig.getPreConfig().isAutoTimestamp()
-        ) {
-            tmpSql += String.format(",%s='%s',%s='%s'", operateColumnName, "U", timestampColumnName, timestampValue);
-        }
-
+        String assignment = columnAssignment(jdbcSinkConfig, columnName);
+        String extra = extraAutoTimestampSet(jdbcSinkConfig, columnName);
+        String where = StringUtils.join(ucColumns.stream().map(x -> quoteIdentifier(x) + " =? ").collect(Collectors.toList()), " and ");
         if (jdbcSinkConfig.getDbSchema() != null && !jdbcSinkConfig.getDbSchema().isEmpty()) {
             return "update " +
                    jdbcSinkConfig.getDbSchema() + "." +
                    quoteIdentifier(jdbcSinkConfig.getTable()) +
                    " set " +
-                   quoteIdentifier(columnName) +
-                   " = ? " + tmpSql + " where " +
-                   StringUtils.join(ucColumns.stream().map(x -> quoteIdentifier(x) + " =? ").collect(Collectors.toList()), " and ");
+                   assignment +
+                   extra + " where " +
+                   where;
         }
         return "update " +
                quoteIdentifier(jdbcSinkConfig.getTable()) +
                " set " +
-               quoteIdentifier(columnName) +
-               " = ? " + tmpSql + " where " +
-               StringUtils.join(ucColumns.stream().map(x -> quoteIdentifier(x) + " =? ").collect(Collectors.toList()), " and ");
+               assignment +
+               extra + " where " +
+               where;
     }
 
     default String updateTableSqlZipper(JdbcSinkConfig jdbcSinkConfig, List<String> ucColumns, Connection conn) {
@@ -679,15 +671,13 @@ public interface JdbcDialect extends Serializable {
             PreConfig preConfig) {
         String operateColumnName = preConfig.getRecordOperateColumnName();
         String timestampColumnName = preConfig.getAutoTimestampColumnName();
-        LocalDateTime now = LocalDateTime.now();
-        DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
-        String timestampValue = now.format(formatter);
+        String timestampLiteral = preConfig.getAutoTimestampLiteral();
         String insetFlagValue = preConfig.getZipperFlagValue().get(0);
         String updateFlagValue = preConfig.getZipperFlagValue().get(1);
         String deleteFlagValue = preConfig.getZipperFlagValue().get(2);
         String delSql =
                 "update  <table>    "
-                + " set <operateColumnName>='" + deleteFlagValue + "',<timestampColumnName>='<timestampValue>'"
+                + " set <operateColumnName>='" + deleteFlagValue + "',<timestampColumnName>=<timestampLiteral>"
                 + " where not exists "
                 + "       (select  <pks:{pk | <pk.sinkColumnName>}; separator=\" , \"> from <tmpTable> where <pks:{pk | <table>.<pk.sinkColumnName>=<tmpTable>.<pk.sinkColumnName> }; separator=\" and \">  ) "
                 + " and <operateColumnName> !='" + deleteFlagValue + "'";
@@ -697,7 +687,7 @@ public interface JdbcDialect extends Serializable {
         template.add("pks", ucColumns);
         template.add("operateColumnName", operateColumnName);
         template.add("timestampColumnName", timestampColumnName);
-        template.add("timestampValue", timestampValue);
+        template.add("timestampLiteral", timestampLiteral);
         PreparedStatement preparedStatement = null;
         int del = 0;
         try {
@@ -935,27 +925,27 @@ public interface JdbcDialect extends Serializable {
     }
 
     default String insertData(JdbcSinkConfig jdbcSinkConfig, String tmpTableName, List<String> columns, List<String> ucColumns) {
-        String insetFlagValue = jdbcSinkConfig.getPreConfig().getZipperFlagValue().get(0);
-        String updateFlagValue = jdbcSinkConfig.getPreConfig().getZipperFlagValue().get(1);
         String deleteFlagValue = jdbcSinkConfig.getPreConfig().getZipperFlagValue().get(2);
         List<String> collect1 = columns.stream().map(this::quoteIdentifier).collect(Collectors.toList());
         List<String> collectCopy = new ArrayList<>(collect1);
         List<String> collect2 = ucColumns.stream().map(this::quoteIdentifier).collect(Collectors.toList());
         String operateColumnName = jdbcSinkConfig.getPreConfig().getRecordOperateColumnName();
         String timestampColumnName = jdbcSinkConfig.getPreConfig().getAutoTimestampColumnName();
-        LocalDateTime now = LocalDateTime.now();
-        DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
-        String timestampValue = now.format(formatter);
         String tmpSql = " where 1=1 ";
         if (!jdbcSinkConfig.getPreConfig().isOpenDelete()
             && jdbcSinkConfig.getPreConfig().isRecordOperate()
             && jdbcSinkConfig.getPreConfig().isAutoTimestamp()
         ) {
             tmpSql += " and (" + operateColumnName + " != '" + deleteFlagValue + "' or " + operateColumnName + " is null)";
-            collect1.add(operateColumnName);
-            collect1.add(timestampColumnName);
-            collectCopy.add(" '" + insetFlagValue + "' " + operateColumnName);
-            collectCopy.add("'" + timestampValue + "'" + timestampColumnName);
+        }
+        if (jdbcSinkConfig.getPreConfig().isAutoTimestampReady()) {
+            applyExtraInsertColumn(collect1, collectCopy, timestampColumnName, jdbcSinkConfig.getPreConfig().getAutoTimestampLiteral());
+        }
+        if (jdbcSinkConfig.getPreConfig().isRecordOperateReady()
+            && jdbcSinkConfig.getPreConfig().getZipperFlagValue() != null
+            && !jdbcSinkConfig.getPreConfig().getZipperFlagValue().isEmpty()) {
+            applyExtraInsertColumn(collect1, collectCopy, operateColumnName,
+                    "'" + jdbcSinkConfig.getPreConfig().getZipperFlagValue().get(0) + "'");
         }
         if (StringUtils.isNoneBlank(jdbcSinkConfig.getDbSchema())) {
             return String.format("insert "
@@ -1429,6 +1419,172 @@ public interface JdbcDialect extends Serializable {
         }
         else {
             return "'" + currentTimeString + "'";
+        }
+    }
+
+    /**
+     * 探测目标列类型。列不存在时返回 null，其他 SQL 异常继续抛出。
+     */
+    default String probeColumnType(Connection conn, JdbcSinkConfig config, String columnName) throws SQLException {
+        if (StringUtils.isBlank(columnName)) {
+            return null;
+        }
+        String predicate = this instanceof ClickHouseDialect ? "1=2" : "1=0";
+        String sql = "SELECT " + quoteIdentifier(columnName) + " FROM " + qualifiedTable(config.getDbSchema(), config.getTable())
+                + " WHERE " + predicate;
+        try (PreparedStatement ps = conn.prepareStatement(sql); ResultSet rs = ps.executeQuery()) {
+            return rs.getMetaData().getColumnTypeName(1);
+        } catch (SQLException e) {
+            if (isMissingColumn(e)) {
+                return null;
+            }
+            throw e;
+        }
+    }
+
+    default boolean isMissingColumn(SQLException e) {
+        int code = e.getErrorCode();
+        String state = e.getSQLState() == null ? "" : e.getSQLState();
+        if (code == 904 || code == 1054 || code == 207 || code == 47) {
+            return true;
+        }
+        if ("42703".equals(state) || "42S22".equals(state)) {
+            return true;
+        }
+        String message = e.getMessage() == null ? "" : e.getMessage().toLowerCase();
+        return message.contains("invalid identifier")
+                || message.contains("unknown column")
+                || message.contains("invalid column")
+                || message.contains("missing columns")
+                || message.contains("无效的列名");
+    }
+
+    default boolean isCharacterColumn(String typeName) {
+        if (typeName == null) {
+            return false;
+        }
+        String type = typeName.toUpperCase();
+        return type.contains("CHAR") || type.contains("TEXT") || type.contains("CLOB") || type.contains("STRING");
+    }
+
+    /**
+     * 按列类型拼时间字面量。formattedTime 格式为 yyyy-MM-dd HH:mm:ss。
+     */
+    default String buildAutoTimestampLiteral(String typeName, String formattedTime) {
+        if (isCharacterColumn(typeName)) {
+            return "'" + formattedTime + "'";
+        }
+        if (this instanceof OracleDialect || this instanceof DaMengDialect) {
+            return "to_date('" + formattedTime + "','yyyy-mm-dd hh24:mi:ss')";
+        }
+        if (this instanceof MysqlDialect) {
+            return "str_to_date('" + formattedTime + "','%Y-%m-%d %H:%i:%s')";
+        }
+        if (this instanceof PostgresDialect || this instanceof HexadbDialect) {
+            return "to_timestamp('" + formattedTime + "','YYYY-MM-DD HH24:MI:SS')";
+        }
+        if (this instanceof SqlServerDialect) {
+            return "CONVERT(datetime,'" + formattedTime + "',120)";
+        }
+        if (this instanceof TrinoDialect) {
+            return "TIMESTAMP '" + formattedTime + "'";
+        }
+        if (this instanceof ClickHouseDialect) {
+            if ("DATE".equalsIgnoreCase(typeName)) {
+                return "toDate('" + formattedTime.substring(0, 10) + "')";
+            }
+            return "toDateTime('" + formattedTime + "')";
+        }
+        return "'" + formattedTime + "'";
+    }
+
+    default boolean bindsValueParameter(JdbcSinkConfig config, String columnName) {
+        PreConfig preConfig = config.getPreConfig();
+        if (preConfig.isAutoTimestampReady() && columnName.equalsIgnoreCase(preConfig.getAutoTimestampColumnName())) {
+            return false;
+        }
+        return !(preConfig.isRecordOperateReady() && columnName.equalsIgnoreCase(preConfig.getRecordOperateColumnName()));
+    }
+
+    default String columnAssignment(JdbcSinkConfig config, String columnName) {
+        PreConfig preConfig = config.getPreConfig();
+        if (preConfig.isAutoTimestampReady() && columnName.equalsIgnoreCase(preConfig.getAutoTimestampColumnName())) {
+            return quoteIdentifier(columnName) + " = " + preConfig.getAutoTimestampLiteral();
+        }
+        if (preConfig.isRecordOperateReady() && columnName.equalsIgnoreCase(preConfig.getRecordOperateColumnName())) {
+            return quoteIdentifier(columnName) + " = 'U'";
+        }
+        return quoteIdentifier(columnName) + " = ? ";
+    }
+
+    default String extraAutoTimestampSet(JdbcSinkConfig config, String columnName) {
+        PreConfig preConfig = config.getPreConfig();
+        String extra = "";
+        if (preConfig.isAutoTimestampReady() && !columnName.equalsIgnoreCase(preConfig.getAutoTimestampColumnName())) {
+            extra += ", " + quoteIdentifier(preConfig.getAutoTimestampColumnName()) + " = " + preConfig.getAutoTimestampLiteral();
+        }
+        if (preConfig.isRecordOperateReady() && !columnName.equalsIgnoreCase(preConfig.getRecordOperateColumnName())) {
+            extra += ", " + quoteIdentifier(preConfig.getRecordOperateColumnName()) + " = 'U'";
+        }
+        return extra;
+    }
+
+    default void applyExtraInsertColumn(List<String> insertCols, List<String> selectExprs, String rawName, String selectExpr) {
+        String quoted = quoteIdentifier(rawName);
+        for (int i = 0; i < insertCols.size(); i++) {
+            if (insertCols.get(i).equalsIgnoreCase(quoted)) {
+                selectExprs.set(i, selectExpr);
+                return;
+            }
+        }
+        insertCols.add(quoted);
+        selectExprs.add(selectExpr);
+    }
+
+    default String qualifiedTable(String schema, String table) {
+        if (StringUtils.isNotBlank(schema)) {
+            return quoteIdentifier(schema) + "." + quoteIdentifier(table);
+        }
+        return quoteIdentifier(table);
+    }
+
+    default String qualifyDottedName(String rawName) {
+        return Arrays.stream(rawName.split("\\.")).map(this::quoteIdentifier).collect(Collectors.joining("."));
+    }
+
+    /**
+     * 临时表主键是否已在目标表中。existsInTarget 为 false 时统计只在临时表中的行。
+     */
+    default long countTempRows(Connection conn, JdbcSinkConfig config, String tmpTableName, List<String> primaryKeys, boolean existsInTarget) throws SQLException {
+        String target = qualifiedTable(config.getDbSchema(), config.getTable());
+        String temp = qualifiedTable(config.getDbSchema(), tmpTableName);
+        String match = primaryKeys.stream()
+                .map(pk -> "a." + quoteIdentifier(pk) + " = t." + quoteIdentifier(pk))
+                .collect(Collectors.joining(" AND "));
+        String exists = existsInTarget ? "EXISTS" : "NOT EXISTS";
+        String sql = "SELECT COUNT(1) FROM " + temp + " t WHERE " + exists + " (SELECT 1 FROM " + target + " a WHERE " + match + ")";
+        try (PreparedStatement ps = conn.prepareStatement(sql); ResultSet rs = ps.executeQuery()) {
+            if (rs.next()) {
+                return rs.getLong(1);
+            }
+            return 0L;
+        }
+    }
+
+    /**
+     * 目标表中这次没有来的行只更新时间戳。
+     */
+    default int updateMissingAutoTimestamp(Connection connection, String table, String tmpTable, List<ColumnMapper> ucColumns, PreConfig preConfig) {
+        String match = ucColumns.stream()
+                .map(pk -> "a." + quoteIdentifier(pk.getSinkColumnName()) + "=b." + quoteIdentifier(pk.getSinkColumnName()))
+                .collect(Collectors.joining(" AND "));
+        String sql = "UPDATE " + qualifyDottedName(table) + " a SET "
+                + quoteIdentifier(preConfig.getAutoTimestampColumnName()) + "=" + preConfig.getAutoTimestampLiteral()
+                + " WHERE NOT EXISTS (SELECT 1 FROM " + qualifyDottedName(tmpTable) + " b WHERE " + match + ")";
+        try (PreparedStatement preparedStatement = connection.prepareStatement(sql)) {
+            return preparedStatement.executeUpdate();
+        } catch (SQLException e) {
+            throw new RuntimeException(e);
         }
     }
 }
